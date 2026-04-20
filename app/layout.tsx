@@ -1,12 +1,21 @@
-import { Geist, Geist_Mono, Inter } from "next/font/google"
+import { Barlow_Condensed, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils"
 
-const inter = Inter({subsets:['latin'],variable:'--font-sans'})
+const bodyFont = IBM_Plex_Sans({
+  subsets: ["latin"],
+  variable: "--font-body",
+})
 
-const fontMono = Geist_Mono({
+const displayFont = Barlow_Condensed({
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-display",
+})
+
+const fontMono = IBM_Plex_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
 })
@@ -20,9 +29,14 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn("antialiased", fontMono.variable, "font-sans", inter.variable)}
+      className={cn(
+        "bg-background antialiased",
+        bodyFont.variable,
+        displayFont.variable,
+        fontMono.variable
+      )}
     >
-      <body>
+      <body className="min-h-svh font-sans">
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
