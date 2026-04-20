@@ -61,11 +61,16 @@ function Carousel({
   const [canScrollPrev, setCanScrollPrev] = React.useState(false)
   const [canScrollNext, setCanScrollNext] = React.useState(false)
 
-  const onSelect = React.useCallback((api: CarouselApi) => {
-    if (!api) return
-    setCanScrollPrev(api.canScrollPrev())
-    setCanScrollNext(api.canScrollNext())
+  const onSelect = React.useCallback((emblaApi: CarouselApi) => {
+    if (!emblaApi) return
+    setCanScrollPrev(emblaApi.canScrollPrev())
+    setCanScrollNext(emblaApi.canScrollNext())
   }, [])
+
+  const onSelectEvent = React.useEffectEvent((emblaApi: CarouselApi) => {
+    if (!emblaApi) return
+    onSelect(emblaApi)
+  })
 
   const scrollPrev = React.useCallback(() => {
     api?.scrollPrev()
@@ -95,14 +100,20 @@ function Carousel({
 
   React.useEffect(() => {
     if (!api) return
-    onSelect(api)
-    api.on("reInit", onSelect)
-    api.on("select", onSelect)
+    const frame = window.requestAnimationFrame(() => {
+      onSelectEvent(api)
+    })
+    const handleSelect = () => onSelectEvent(api)
+
+    api.on("reInit", handleSelect)
+    api.on("select", handleSelect)
 
     return () => {
-      api?.off("select", onSelect)
+      window.cancelAnimationFrame(frame)
+      api.off("reInit", handleSelect)
+      api.off("select", handleSelect)
     }
-  }, [api, onSelect])
+  }, [api])
 
   return (
     <CarouselContext.Provider

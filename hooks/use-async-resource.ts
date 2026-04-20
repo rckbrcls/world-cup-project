@@ -24,8 +24,9 @@ export function useAsyncResource<TData>({
   initialData,
   load,
 }: AsyncResourceOptions<TData>) {
-  const stableInitialData = React.useRef(initialData).current
-  const loadRef = React.useRef(load)
+  const [stableInitialData] = React.useState(() => initialData)
+  const runLoad = React.useEffectEvent(load)
+  const keySignature = key.map((value) => String(value ?? "__null__")).join("::")
   const [reloadToken, setReloadToken] = React.useState(0)
   const [state, setState] = React.useState<AsyncResourceState<TData>>({
     status: enabled ? "loading" : "idle",
@@ -34,34 +35,30 @@ export function useAsyncResource<TData>({
     hasFetched: false,
   })
 
-  React.useEffect(() => {
-    loadRef.current = load
-  }, [load])
-
   const reload = React.useCallback(() => {
     setReloadToken((value) => value + 1)
   }, [])
 
   React.useEffect(() => {
     if (!enabled) {
-      setState({
-        status: "idle",
-        data: stableInitialData,
-        errorMessage: null,
-        hasFetched: false,
-      })
       return
     }
 
     const controller = new AbortController()
 
-    setState((previous) => ({
-      ...previous,
-      status: "loading",
-      errorMessage: null,
-    }))
+    queueMicrotask(() => {
+      if (controller.signal.aborted) {
+        return
+      }
 
-    loadRef.current(controller.signal)
+      setState((previous) => ({
+        ...previous,
+        status: "loading",
+        errorMessage: null,
+      }))
+    })
+
+    runLoad(controller.signal)
       .then((data) => {
         setState({
           status: "success",
@@ -91,15 +88,25 @@ export function useAsyncResource<TData>({
     return () => {
       controller.abort()
     }
-  }, [enabled, reloadToken, stableInitialData, ...key])
+  }, [enabled, keySignature, reloadToken, stableInitialData])
+
+  const effectiveState = enabled
+    ? state
+    : {
+        status: "idle" as const,
+        data: stableInitialData,
+        errorMessage: null,
+        hasFetched: false,
+      }
 
   return {
-    ...state,
+    ...effectiveState,
     reload,
-    isIdle: state.status === "idle",
-    isLoading: state.status === "loading" && !state.hasFetched,
-    isRefreshing: state.status === "loading" && state.hasFetched,
-    isSuccess: state.status === "success",
-    isError: state.status === "error",
+    isIdle: effectiveState.status === "idle",
+    isLoading: effectiveState.status === "loading" && !effectiveState.hasFetched,
+    isRefreshing:
+      effectiveState.status === "loading" && effectiveState.hasFetched,
+    isSuccess: effectiveState.status === "success",
+    isError: effectiveState.status === "error",
   }
 }

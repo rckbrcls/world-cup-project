@@ -106,8 +106,6 @@ export function OverviewSection({ dashboard }: { dashboard: DashboardState }) {
         }
       />
 
-      {dashboard.selectedEdition === null && dashboard.editions.isLoading ? null : null}
-
       {(dashboard.teams.errorMessage ||
         dashboard.matches.errorMessage ||
         dashboard.groups.errorMessage ||

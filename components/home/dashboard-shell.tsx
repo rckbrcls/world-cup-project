@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Command, Search, Server } from "lucide-react"
+import { Search, Server } from "lucide-react"
 
 import { HomeCommandCenter } from "@/components/home/command-center"
 import { homeSectionMap, homeSections } from "@/components/home/home-config"

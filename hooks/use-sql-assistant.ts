@@ -51,8 +51,40 @@ export function useSqlAssistant(options: UseSqlAssistantOptions = {}) {
   }, [adapter])
 
   React.useEffect(() => {
-    void refreshStatus()
-  }, [refreshStatus])
+    let isActive = true
+
+    const loadInitialStatus = async () => {
+      try {
+        const nextStatus = await adapter.getStatus()
+        if (!isActive) {
+          return
+        }
+
+        setStatus(nextStatus)
+        setErrorMessage(null)
+      } catch (error) {
+        if (!isActive) {
+          return
+        }
+
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "Unable to retrieve the SQL assistant status."
+        )
+      } finally {
+        if (isActive) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    void loadInitialStatus()
+
+    return () => {
+      isActive = false
+    }
+  }, [adapter])
 
   const submit = React.useCallback(
     async (prompt: string, context: SqlAssistantContext) => {

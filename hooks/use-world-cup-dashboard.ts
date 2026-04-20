@@ -44,14 +44,15 @@ function selectExistingOrDefault<TValue extends number | null>(
 export function useWorldCupDashboard() {
   const [activeSection, setActiveSection] =
     React.useState<HomeSectionId>("overview")
-  const [selectedEditionId, setSelectedEditionId] = React.useState<number | null>(
+  const [preferredEditionId, setPreferredEditionId] =
+    React.useState<number | null>(null)
+  const [preferredTeamId, setPreferredTeamId] = React.useState<number | null>(
     null
   )
-  const [selectedTeamId, setSelectedTeamId] = React.useState<number | null>(null)
-  const [selectedGroupId, setSelectedGroupId] = React.useState<number | null>(
+  const [preferredGroupId, setPreferredGroupId] = React.useState<number | null>(
     null
   )
-  const [selectedMatchId, setSelectedMatchId] = React.useState<number | null>(
+  const [preferredMatchId, setPreferredMatchId] = React.useState<number | null>(
     null
   )
   const [isCommandOpen, setIsCommandOpen] = React.useState(false)
@@ -67,6 +68,16 @@ export function useWorldCupDashboard() {
     initialData: [] as EditionSummary[],
     load: (signal) => worldCupApi.listEditions({ signal }),
   })
+
+  const selectedEditionId = React.useMemo(
+    () =>
+      selectExistingOrDefault(
+        preferredEditionId,
+        editions.data.map((edition) => edition.edition_id),
+        getLatestEdition(editions.data)?.edition_id ?? null
+      ),
+    [editions.data, preferredEditionId]
+  )
 
   const selectedEdition = React.useMemo(() => {
     return (
@@ -115,15 +126,45 @@ export function useWorldCupDashboard() {
     [groups.data]
   )
 
+  const selectedTeamId = React.useMemo(
+    () =>
+      selectExistingOrDefault(
+        preferredTeamId,
+        teams.data.map((team) => team.team_id),
+        getDefaultEditionTeamId(selectedEdition, teams.data)
+      ),
+    [preferredTeamId, selectedEdition, teams.data]
+  )
+
   const selectedTeam = React.useMemo(() => {
     return teams.data.find((team) => team.team_id === selectedTeamId) ?? null
   }, [selectedTeamId, teams.data])
+
+  const selectedGroupId = React.useMemo(
+    () =>
+      selectExistingOrDefault(
+        preferredGroupId,
+        groupedGroups.map((group) => group.group_id),
+        getDefaultGroupId(groupedGroups)
+      ),
+    [groupedGroups, preferredGroupId]
+  )
 
   const selectedGroup = React.useMemo(() => {
     return (
       groupedGroups.find((group) => group.group_id === selectedGroupId) ?? null
     )
   }, [groupedGroups, selectedGroupId])
+
+  const selectedMatchId = React.useMemo(
+    () =>
+      selectExistingOrDefault(
+        preferredMatchId,
+        matches.data.map((match) => match.match_id),
+        getDefaultMatchId(matches.data)
+      ),
+    [matches.data, preferredMatchId]
+  )
 
   const selectedMatch = React.useMemo(() => {
     return matches.data.find((match) => match.match_id === selectedMatchId) ?? null
@@ -158,50 +199,6 @@ export function useWorldCupDashboard() {
     load: (signal) => worldCupApi.listMatchEvents(selectedMatchId!, { signal }),
   })
 
-  React.useEffect(() => {
-    if (selectedEditionId !== null || !editions.data.length) {
-      return
-    }
-
-    setSelectedEditionId(getLatestEdition(editions.data)?.edition_id ?? null)
-  }, [editions.data, selectedEditionId])
-
-  React.useEffect(() => {
-    const nextTeamId = selectExistingOrDefault(
-      selectedTeamId,
-      teams.data.map((team) => team.team_id),
-      getDefaultEditionTeamId(selectedEdition, teams.data)
-    )
-
-    if (nextTeamId !== selectedTeamId) {
-      setSelectedTeamId(nextTeamId)
-    }
-  }, [selectedEdition, selectedTeamId, teams.data])
-
-  React.useEffect(() => {
-    const nextGroupId = selectExistingOrDefault(
-      selectedGroupId,
-      groupedGroups.map((group) => group.group_id),
-      getDefaultGroupId(groupedGroups)
-    )
-
-    if (nextGroupId !== selectedGroupId) {
-      setSelectedGroupId(nextGroupId)
-    }
-  }, [groupedGroups, selectedGroupId])
-
-  React.useEffect(() => {
-    const nextMatchId = selectExistingOrDefault(
-      selectedMatchId,
-      matches.data.map((match) => match.match_id),
-      getDefaultMatchId(matches.data)
-    )
-
-    if (nextMatchId !== selectedMatchId) {
-      setSelectedMatchId(nextMatchId)
-    }
-  }, [matches.data, selectedMatchId])
-
   const overviewMetrics = React.useMemo(
     () =>
       buildOverviewMetrics({
@@ -234,7 +231,7 @@ export function useWorldCupDashboard() {
   const focusTeam = React.useCallback(
     (teamId: number, nextSection: HomeSectionId = "teams") => {
       React.startTransition(() => {
-        setSelectedTeamId(teamId)
+        setPreferredTeamId(teamId)
         setActiveSection(nextSection)
         setIsCommandOpen(false)
       })
@@ -244,7 +241,7 @@ export function useWorldCupDashboard() {
 
   const focusMatch = React.useCallback((matchId: number) => {
     React.startTransition(() => {
-      setSelectedMatchId(matchId)
+      setPreferredMatchId(matchId)
       setActiveSection("matches")
       setIsCommandOpen(false)
     })
@@ -252,7 +249,7 @@ export function useWorldCupDashboard() {
 
   const focusGroup = React.useCallback((groupId: number) => {
     React.startTransition(() => {
-      setSelectedGroupId(groupId)
+      setPreferredGroupId(groupId)
       setActiveSection("groups")
       setIsCommandOpen(false)
     })
@@ -260,7 +257,7 @@ export function useWorldCupDashboard() {
 
   const focusEdition = React.useCallback((editionId: number) => {
     React.startTransition(() => {
-      setSelectedEditionId(editionId)
+      setPreferredEditionId(editionId)
       setActiveSection("overview")
       setIsCommandOpen(false)
     })

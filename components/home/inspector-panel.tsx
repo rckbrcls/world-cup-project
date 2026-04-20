@@ -4,7 +4,6 @@ import * as React from "react"
 import {
   CalendarClock,
   MapPinned,
-  ShieldAlert,
   TimerReset,
   Trophy,
   Users,
@@ -314,7 +313,7 @@ function MatchInspector({ dashboard }: { dashboard: DashboardState }) {
                     {formatEventTypeLabel(event.event_type)}
                   </SemanticBadge>
                   <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                    {event.minute_label}'
+                    {event.minute_label}&apos;
                   </span>
                 </div>
                 <p className="font-medium text-foreground">

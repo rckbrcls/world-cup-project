@@ -2,6 +2,7 @@ import { Barlow_Condensed, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import { TooltipProvider } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
 const bodyFont = IBM_Plex_Sans({
@@ -17,6 +18,7 @@ const displayFont = Barlow_Condensed({
 
 const fontMono = IBM_Plex_Mono({
   subsets: ["latin"],
+  weight: ["400", "500", "600"],
   variable: "--font-mono",
 })
 
@@ -37,7 +39,9 @@ export default function RootLayout({
       )}
     >
       <body className="min-h-svh font-sans">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <TooltipProvider>{children}</TooltipProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

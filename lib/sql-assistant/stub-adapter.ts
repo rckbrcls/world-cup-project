@@ -14,14 +14,14 @@ const fallbackStatus: SqlAssistantStatus = {
 }
 
 export class StubSqlAssistantAdapter implements SqlAssistantAdapter {
-  async getStatus(_signal?: AbortSignal) {
+  async getStatus(signal?: AbortSignal) {
+    void signal
     return fallbackStatus
   }
 
-  async generateSql(
-    _request: SqlGenerationRequest,
-    _signal?: AbortSignal
-  ) {
+  async generateSql(request: SqlGenerationRequest, signal?: AbortSignal) {
+    void request
+    void signal
     return {
       status: "fallback",
       generatedSql: null,
