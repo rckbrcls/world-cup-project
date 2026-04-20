@@ -16,19 +16,28 @@ function buildBackendUrl(path: string[], request: NextRequest) {
   return `${getBackendBaseUrl()}/${pathname}${search}`
 }
 
-export const dynamic = "force-dynamic"
-
-export async function GET(
+async function forwardRequest(
   request: NextRequest,
   context: { params: Promise<{ path: string[] }> }
 ) {
   const { path } = await context.params
+  const headers = new Headers({
+    accept: "application/json",
+  })
+  const contentType = request.headers.get("content-type")
+
+  if (contentType) {
+    headers.set("content-type", contentType)
+  }
 
   try {
     const response = await fetch(buildBackendUrl(path, request), {
-      headers: {
-        accept: "application/json",
-      },
+      method: request.method,
+      headers,
+      body:
+        request.method === "GET" || request.method === "HEAD"
+          ? undefined
+          : await request.text(),
       cache: "no-store",
     })
 
@@ -48,4 +57,20 @@ export async function GET(
       { status: 503 }
     )
   }
+}
+
+export const dynamic = "force-dynamic"
+
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ path: string[] }> }
+) {
+  return forwardRequest(request, context)
+}
+
+export async function POST(
+  request: NextRequest,
+  context: { params: Promise<{ path: string[] }> }
+) {
+  return forwardRequest(request, context)
 }

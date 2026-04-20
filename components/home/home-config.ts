@@ -74,7 +74,7 @@ export const homeSections: HomeSectionDefinition[] = [
     id: "natural-query",
     label: "Natural Query",
     shortLabel: "Query",
-    description: "Prepared SQL assistant workspace for future Gemma 4 integration.",
+    description: "Gemma 4 local SQL generation, review, and controlled execution.",
     icon: FileCode2,
   },
 ]

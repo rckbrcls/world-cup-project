@@ -1,9 +1,28 @@
 "use client"
 
 import * as React from "react"
-import { Bot, Database, LoaderCircle, Play, RefreshCcw } from "lucide-react"
+import {
+  AlertTriangle,
+  Bot,
+  CheckCircle2,
+  Cpu,
+  Database,
+  Download,
+  HardDriveDownload,
+  LoaderCircle,
+  Pause,
+  Play,
+  RefreshCcw,
+  ShieldAlert,
+  Square,
+} from "lucide-react"
 
-import { SemanticBadge } from "@/components/home/panel-states"
+import {
+  PanelEmptyState,
+  PanelErrorState,
+  PanelUnsupportedState,
+  SemanticBadge,
+} from "@/components/home/panel-states"
 import { SectionHeading } from "@/components/home/section-heading"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -14,6 +33,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
 import {
   Table,
   TableBody,
@@ -25,7 +45,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { useSqlAssistant } from "@/hooks/use-sql-assistant"
 import type { HomeSectionId } from "@/hooks/use-world-cup-dashboard"
-import type { ModelStatus } from "@/lib/sql-assistant/types"
+import type { GemmaEngineLifecycle } from "@/lib/sql-assistant/types"
 
 type NaturalQueryPanelProps = {
   section: HomeSectionId
@@ -36,220 +56,514 @@ type NaturalQueryPanelProps = {
   groupId: number | null
 }
 
-const statusToneMap: Record<
-  ModelStatus,
+const lifecycleToneMap: Record<
+  GemmaEngineLifecycle,
   "neutral" | "warning" | "destructive" | "success"
 > = {
-  unavailable: "destructive",
+  unavailable: "neutral",
+  unsupported: "destructive",
   "not-downloaded": "warning",
+  "ready-to-download": "neutral",
   downloading: "warning",
+  paused: "warning",
+  "download-error": "destructive",
   initializing: "warning",
+  warming: "warning",
   ready: "success",
-  processing: "warning",
-  error: "destructive",
-  fallback: "neutral",
+  fallback: "destructive",
 }
 
-export function NaturalQueryPanel({
-  section,
-  editionId,
-  editionYear,
-  teamId,
-  matchId,
-  groupId,
-}: NaturalQueryPanelProps) {
+function formatBytes(value: number | null | undefined) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return "Unknown"
+  }
+
+  const units = ["B", "KB", "MB", "GB", "TB"]
+  let currentValue = value
+  let unitIndex = 0
+
+  while (currentValue >= 1024 && unitIndex < units.length - 1) {
+    currentValue /= 1024
+    unitIndex += 1
+  }
+
+  return `${currentValue.toFixed(currentValue >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`
+}
+
+function buildSelectionChips(props: NaturalQueryPanelProps) {
+  return [
+    `Section ${props.section}`,
+    `Edition ${props.editionYear ?? "all"}`,
+    props.teamId ? `Team #${props.teamId}` : null,
+    props.matchId ? `Match #${props.matchId}` : null,
+    props.groupId ? `Group #${props.groupId}` : null,
+  ].filter((value): value is string => Boolean(value))
+}
+
+export function NaturalQueryPanel(props: NaturalQueryPanelProps) {
   const assistant = useSqlAssistant()
   const [prompt, setPrompt] = React.useState("")
+  const selectionChips = buildSelectionChips(props)
+  const draft = assistant.draft
 
-  const canSubmit =
-    !assistant.isSubmitting && prompt.trim().length > 0 && editionId !== null
-
-  const handleSubmit = React.useCallback(async () => {
-    await assistant.submit(prompt, {
-      section,
-      editionId,
-      editionYear,
-      teamId,
-      matchId,
-      groupId,
+  const handleGenerate = React.useCallback(async () => {
+    await assistant.generateSql(prompt, {
+      section: props.section,
+      editionId: props.editionId,
+      editionYear: props.editionYear,
+      teamId: props.teamId,
+      matchId: props.matchId,
+      groupId: props.groupId,
     })
-  }, [
-    assistant,
-    editionId,
-    editionYear,
-    groupId,
-    matchId,
-    prompt,
-    section,
-    teamId,
-  ])
+  }, [assistant, prompt, props])
+
+  const statusActions = (
+    <>
+      <SemanticBadge tone={lifecycleToneMap[assistant.lifecycle]}>
+        {assistant.statusSummary}
+      </SemanticBadge>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => void assistant.refreshEnvironment()}
+        disabled={assistant.isBusy}
+      >
+        <RefreshCcw />
+        Refresh
+      </Button>
+    </>
+  )
+
+  const generationStatusLabel =
+    assistant.generationState === "generating"
+      ? "Generating SQL"
+      : assistant.executionState === "validating"
+        ? "Validating SQL"
+        : assistant.executionState === "running"
+        ? "Executing query"
+        : assistant.generationState === "canceled" ||
+            assistant.executionState === "canceled"
+          ? "Canceled"
+          : "Idle"
 
   return (
     <div className="space-y-6">
       <SectionHeading
-        eyebrow="Prepared Capability"
-        title="Natural Query Workspace"
-        description="This area is intentionally secondary to the operational UI. It prepares the lifecycle, contracts, and review surfaces for local Gemma 4 SQL generation without making chat the center of the product."
-        actions={
-          <>
-            <SemanticBadge
-              tone={assistant.status ? statusToneMap[assistant.status.status] : "neutral"}
-            >
-              {assistant.status?.summary ?? "Checking model status"}
-            </SemanticBadge>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void assistant.refreshStatus()}
-              disabled={assistant.isLoading}
-            >
-              {assistant.isLoading ? (
-                <LoaderCircle className="animate-spin" />
-              ) : (
-                <RefreshCcw />
-              )}
-              Refresh
-            </Button>
-          </>
-        }
+        eyebrow="On-device SQL"
+        title="Natural Query"
+        description="Gemma 4 stays secondary to the operational workspace: local model status, SQL preview, controlled execution, and tabular results remain visible in the same surface."
+        actions={statusActions}
       />
 
-      {assistant.status?.detail ? (
-        <Alert>
-          <Bot />
-          <AlertTitle>Gemma 4 readiness</AlertTitle>
-          <AlertDescription>{assistant.status.detail}</AlertDescription>
+      {assistant.failure ? (
+        <Alert variant="destructive">
+          <ShieldAlert />
+          <AlertTitle>Controlled query flow reported a failure</AlertTitle>
+          <AlertDescription>
+            {assistant.failure.message}
+            {assistant.failure.detail ? ` ${assistant.failure.detail}` : ""}
+          </AlertDescription>
         </Alert>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card className="border-border/80 shadow-none">
-          <CardHeader className="border-b border-border/70">
-            <CardTitle>Natural-language prompt</CardTitle>
-            <CardDescription>
-              Ask for an analytical SQL query tied to the currently selected
-              edition or object. The generated SQL remains visible for review.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-4">
-            <Textarea
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              placeholder="Example: Show all semifinal matches for the selected edition with stadium, score, and winner."
-              className="min-h-36 resize-none bg-background"
-            />
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <SemanticBadge tone="neutral">Edition {editionYear ?? "N/A"}</SemanticBadge>
-              <SemanticBadge tone="neutral">Section {section}</SemanticBadge>
-              {teamId ? <SemanticBadge tone="neutral">Team #{teamId}</SemanticBadge> : null}
-              {matchId ? <SemanticBadge tone="neutral">Match #{matchId}</SemanticBadge> : null}
-              {groupId ? <SemanticBadge tone="neutral">Group #{groupId}</SemanticBadge> : null}
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs leading-5 text-muted-foreground">
-                The future engine will remain local-first and browser-first when
-                viable. Until then, this panel exposes the exact states and
-                review surfaces without faking SQL.
-              </p>
-              <Button onClick={() => void handleSubmit()} disabled={!canSubmit}>
-                {assistant.isSubmitting ? (
-                  <LoaderCircle className="animate-spin" />
-                ) : (
-                  <Play />
-                )}
-                Generate SQL
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
+        <div className="space-y-4">
+          <Card className="border-border/80 shadow-none">
+            <CardHeader className="border-b border-border/70">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <CardTitle>Model status</CardTitle>
+                  <CardDescription>
+                    Gemma 4 runs as the primary local SQL engine when the browser
+                    environment supports on-device inference.
+                  </CardDescription>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <SemanticBadge tone="neutral">
+                    {assistant.manifest.label}
+                  </SemanticBadge>
+                  <SemanticBadge
+                    tone={assistant.environment?.isOnDevice ? "qualified" : "neutral"}
+                  >
+                    Local / on-device
+                  </SemanticBadge>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-4">
+              {assistant.lifecycle === "unsupported" ||
+              assistant.lifecycle === "fallback" ? (
+                <PanelUnsupportedState
+                  title={assistant.statusSummary}
+                  description={assistant.statusDetail}
+                />
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <SemanticBadge tone={lifecycleToneMap[assistant.lifecycle]}>
+                      {assistant.lifecycle}
+                    </SemanticBadge>
+                    <span className="text-sm text-muted-foreground">
+                      {assistant.statusDetail}
+                    </span>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
+                      <div className="mb-1 flex items-center gap-2 text-sm font-medium text-foreground">
+                        <Cpu className="size-4 text-muted-foreground" />
+                        Browser capability
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        WebGPU:{" "}
+                        {assistant.environment?.capabilities.hasWebGpu
+                          ? "available"
+                          : "missing"}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Secure context:{" "}
+                        {assistant.environment?.capabilities.isSecureContext
+                          ? "ready"
+                          : "required"}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
+                      <div className="mb-1 flex items-center gap-2 text-sm font-medium text-foreground">
+                        <HardDriveDownload className="size-4 text-muted-foreground" />
+                        Local capacity
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Available:{" "}
+                        {formatBytes(
+                          assistant.environment?.capabilities.availableStorageBytes
+                        )}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Recommended:{" "}
+                        {formatBytes(
+                          assistant.manifest.minBrowserCapabilities
+                            .recommendedAvailableStorageBytes
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  {assistant.downloadProgress ? (
+                    <div className="space-y-2 rounded-lg border border-border/70 bg-muted/20 p-3">
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="font-medium text-foreground">
+                          Model download progress
+                        </span>
+                        <span className="text-muted-foreground">
+                          {assistant.downloadProgress.percent ?? "—"}%
+                        </span>
+                      </div>
+                      <Progress value={assistant.downloadProgress.percent ?? 0} />
+                      <p className="text-xs text-muted-foreground">
+                        {formatBytes(assistant.downloadProgress.downloadedBytes)} of{" "}
+                        {formatBytes(assistant.downloadProgress.totalBytes)}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  <div className="flex flex-wrap gap-2">
+                    {assistant.canDownload ? (
+                      <Button
+                        variant="default"
+                        onClick={() => void assistant.downloadModel()}
+                      >
+                        <Download />
+                        Download model
+                      </Button>
+                    ) : null}
+                    {assistant.activeOperation === "download" ? (
+                      <Button variant="outline" onClick={assistant.pauseDownload}>
+                        <Pause />
+                        Pause download
+                      </Button>
+                    ) : null}
+                    {assistant.lifecycle === "paused" ? (
+                      <Button
+                        variant="outline"
+                        onClick={() => void assistant.resumeDownload()}
+                      >
+                        <Play />
+                        Resume download
+                      </Button>
+                    ) : null}
+                    {assistant.canInitialize ? (
+                      <Button
+                        variant="outline"
+                        onClick={() => void assistant.initializeModel()}
+                      >
+                        <Bot />
+                        Initialize Gemma 4
+                      </Button>
+                    ) : null}
+                    {assistant.isBusy &&
+                    assistant.activeOperation !== "download" ? (
+                      <Button variant="outline" onClick={assistant.cancelOperation}>
+                        <Square />
+                        Cancel
+                      </Button>
+                    ) : null}
+                  </div>
+
+                  {assistant.environment?.notices.length ? (
+                    <ul className="space-y-2 rounded-lg border border-border/70 bg-muted/20 p-3 text-sm text-muted-foreground">
+                      {assistant.environment.notices.map((notice) => (
+                        <li key={notice}>{notice}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/80 shadow-none">
+            <CardHeader className="border-b border-border/70">
+              <CardTitle>Prompt</CardTitle>
+              <CardDescription>
+                Ask for domain-specific SQL in plain language while staying anchored to
+                the current World Cup selection.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-4">
+              <Textarea
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                placeholder="Example: Show the semifinal matches for the selected edition with stadium, host city, score, and winner."
+                className="min-h-40 resize-none bg-background"
+              />
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                {selectionChips.map((chip) => (
+                  <SemanticBadge key={chip} tone="neutral">
+                    {chip}
+                  </SemanticBadge>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/20 p-3">
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    SQL generation workflow
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Status: {generationStatusLabel}. The prompt remains contextual and the
+                    generated SQL stays visible for review.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {assistant.activeOperation === "generate" ? (
+                    <Button variant="outline" onClick={assistant.cancelOperation}>
+                      <Square />
+                      Cancel
+                    </Button>
+                  ) : null}
+                  <Button
+                    onClick={() => void handleGenerate()}
+                    disabled={!assistant.canGenerate || prompt.trim().length === 0}
+                  >
+                    {assistant.generationState === "generating" ? (
+                      <LoaderCircle className="animate-spin" />
+                    ) : (
+                      <Play />
+                    )}
+                    Generate SQL
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         <div className="space-y-4">
           <Card className="border-border/80 shadow-none">
             <CardHeader className="border-b border-border/70">
-              <CardTitle>SQL preview</CardTitle>
-              <CardDescription>
-                Generated SQL must stay inspectable instead of hidden behind chat.
-              </CardDescription>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <CardTitle>SQL preview</CardTitle>
+                  <CardDescription>
+                    Generated SQL is always inspectable and normalized before controlled
+                    execution.
+                  </CardDescription>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {draft?.confidence != null ? (
+                    <SemanticBadge tone="neutral">
+                      Confidence {(draft.confidence * 100).toFixed(0)}%
+                    </SemanticBadge>
+                  ) : null}
+                  {draft?.isExecutable ? (
+                    <SemanticBadge tone="success">Read-only validated</SemanticBadge>
+                  ) : draft ? (
+                    <SemanticBadge tone="warning">Review required</SemanticBadge>
+                  ) : null}
+                </div>
+              </div>
             </CardHeader>
-            <CardContent className="pt-4">
-              <div className="rounded-lg border border-border/70 bg-muted/20 p-4 font-mono text-xs leading-6 text-muted-foreground">
-                {assistant.response?.generatedSql ??
-                  "Generated SQL will appear here once the real Gemma 4 adapter is connected."}
+            <CardContent className="space-y-4 pt-4">
+              <div className="rounded-lg border border-border/70 bg-muted/20 p-4">
+                <pre className="max-h-72 overflow-auto font-mono text-xs leading-6 whitespace-pre-wrap text-foreground">
+                  {draft?.previewSql ??
+                    "No SQL draft yet. Initialize Gemma 4, submit a natural-language request, and the generated SQL will stay visible here."}
+                </pre>
+              </div>
+
+              {draft?.clarification ? (
+                <Alert>
+                  <AlertTriangle />
+                  <AlertTitle>Clarification required</AlertTitle>
+                  <AlertDescription>{draft.clarification}</AlertDescription>
+                </Alert>
+              ) : null}
+
+              {draft?.validationIssues.length ? (
+                <Alert variant="destructive">
+                  <ShieldAlert />
+                  <AlertTitle>Execution blocked by validation</AlertTitle>
+                  <AlertDescription>{draft.validationIssues.join(" ")}</AlertDescription>
+                </Alert>
+              ) : null}
+
+              {draft?.warnings.length ? (
+                <Alert>
+                  <Database />
+                  <AlertTitle>Review notes</AlertTitle>
+                  <AlertDescription>
+                    <ul className="space-y-2">
+                      {draft.warnings.map((warning) => (
+                        <li key={warning}>{warning}</li>
+                      ))}
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+
+              <div className="flex flex-wrap justify-end gap-2">
+                {assistant.activeOperation === "execute" ? (
+                  <Button variant="outline" onClick={assistant.cancelOperation}>
+                    <Square />
+                    Cancel
+                  </Button>
+                ) : null}
+                <Button
+                  variant="default"
+                  onClick={() => void assistant.executeSql()}
+                  disabled={!assistant.canExecute}
+                >
+                  {assistant.executionState === "running" ||
+                  assistant.executionState === "validating" ? (
+                    <LoaderCircle className="animate-spin" />
+                  ) : (
+                    <Database />
+                  )}
+                  Execute query
+                </Button>
               </div>
             </CardContent>
           </Card>
 
           <Card className="border-border/80 shadow-none">
             <CardHeader className="border-b border-border/70">
-              <CardTitle>Model and execution status</CardTitle>
-              <CardDescription>
-                Complete lifecycle states are already modeled for future local execution.
-              </CardDescription>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <CardTitle>Result surface</CardTitle>
+                  <CardDescription>
+                    Backend execution remains separate from generation, and the result
+                    lands in the same operational workspace.
+                  </CardDescription>
+                </div>
+                {assistant.execution ? (
+                  <div className="flex flex-wrap gap-2">
+                    <SemanticBadge
+                      tone={
+                        assistant.executionState === "empty" ? "warning" : "success"
+                      }
+                    >
+                      {assistant.execution.rowCount} rows
+                    </SemanticBadge>
+                    {assistant.execution.truncated ? (
+                      <SemanticBadge tone="warning">Truncated</SemanticBadge>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             </CardHeader>
-            <CardContent className="space-y-3 pt-4 text-sm">
-              <div className="flex items-center gap-2">
-                <Database className="size-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Primary model</span>
-                <span className="font-medium text-foreground">Gemma 4</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <SemanticBadge
-                  tone={assistant.status ? statusToneMap[assistant.status.status] : "neutral"}
-                >
-                  {assistant.status?.status ?? "loading"}
-                </SemanticBadge>
-                <span className="text-muted-foreground">
-                  {assistant.errorMessage ??
-                    assistant.status?.summary ??
-                    "Loading model metadata"}
-                </span>
-              </div>
-              {assistant.response?.notices.length ? (
-                <ul className="space-y-2 text-xs leading-5 text-muted-foreground">
-                  {assistant.response.notices.map((notice) => (
-                    <li key={notice}>{notice}</li>
-                  ))}
-                </ul>
-              ) : null}
+            <CardContent className="space-y-4 pt-4">
+              {assistant.executionState === "running" ||
+              assistant.executionState === "validating" ? (
+                <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground">
+                  {assistant.executionState === "validating"
+                    ? "The generated SQL is being checked locally before controlled execution."
+                    : "The validated SQL is running against the existing FastAPI backend."}
+                </div>
+              ) : assistant.executionState === "empty" && assistant.execution ? (
+                <PanelEmptyState
+                  title="Query returned no rows"
+                  description="The SQL executed successfully, but the current selection and filters produced an empty result set."
+                />
+              ) : assistant.execution ? (
+                <>
+                  {assistant.execution.notices.length ? (
+                    <Alert>
+                      <CheckCircle2 />
+                      <AlertTitle>Execution notices</AlertTitle>
+                      <AlertDescription>
+                        <ul className="space-y-2">
+                          {assistant.execution.notices.map((notice) => (
+                            <li key={notice}>{notice}</li>
+                          ))}
+                        </ul>
+                      </AlertDescription>
+                    </Alert>
+                  ) : null}
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        {assistant.execution.columns.map((column) => (
+                          <TableHead key={column}>{column}</TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {assistant.execution.rows.map((row, rowIndex) => (
+                        <TableRow key={rowIndex}>
+                          {assistant.execution?.columns.map((column) => (
+                            <TableCell key={column}>
+                              {String(row[column] ?? "—")}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </>
+              ) : assistant.executionState === "error" ? (
+                <PanelErrorState
+                  title="Execution failed"
+                  description={
+                    assistant.failure?.message ??
+                    "The backend rejected the query execution."
+                  }
+                  onRetry={
+                    assistant.canExecute
+                      ? () => {
+                          void assistant.executeSql()
+                        }
+                      : undefined
+                  }
+                />
+              ) : (
+                <PanelEmptyState
+                  title="No execution yet"
+                  description="Generate a validated SQL draft first, then run it through the controlled backend path to inspect the result table here."
+                />
+              )}
             </CardContent>
           </Card>
         </div>
       </div>
-
-      <Card className="border-border/80 shadow-none">
-        <CardHeader className="border-b border-border/70">
-          <CardTitle>Result surface</CardTitle>
-          <CardDescription>
-            Query results will land in the same workspace, not in a detached AI thread.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-4">
-          {assistant.response?.resultRows.length ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {assistant.response.resultColumns.map((column) => (
-                    <TableHead key={column}>{column}</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {assistant.response.resultRows.map((row, rowIndex) => (
-                  <TableRow key={rowIndex}>
-                    {assistant.response?.resultColumns.map((column) => (
-                      <TableCell key={column}>{String(row[column] ?? "—")}</TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground">
-              No result set yet. The panel is intentionally live-ready but model-empty.
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   )
 }

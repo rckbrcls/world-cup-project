@@ -1,19 +1,31 @@
-export type ModelStatus =
+export type GemmaEngineLifecycle =
   | "unavailable"
+  | "unsupported"
   | "not-downloaded"
+  | "ready-to-download"
   | "downloading"
+  | "paused"
+  | "download-error"
   | "initializing"
+  | "warming"
   | "ready"
-  | "processing"
-  | "error"
   | "fallback"
 
-export type SqlAssistantStatus = {
-  modelName: "Gemma 4"
-  status: ModelStatus
-  summary: string
-  detail?: string
-}
+export type SqlGenerationState =
+  | "idle"
+  | "generating"
+  | "success"
+  | "error"
+  | "canceled"
+
+export type SqlExecutionState =
+  | "idle"
+  | "validating"
+  | "running"
+  | "success"
+  | "empty"
+  | "error"
+  | "canceled"
 
 export type SqlAssistantContext = {
   section: string
@@ -24,18 +36,81 @@ export type SqlAssistantContext = {
   groupId?: number | null
 }
 
-export type SqlGenerationRequest = {
-  prompt: string
-  context: SqlAssistantContext
+export type SqlResultCell = string | number | boolean | null
+
+export type SqlResultRow = Record<string, SqlResultCell>
+
+export type GemmaModelManifest = {
+  id: string
+  label: string
+  variant: string
+  downloadUrl: string
+  expectedBytes: number
+  minBrowserCapabilities: {
+    requiresWebGpu: boolean
+    requiresSecureContext: boolean
+    recommendedDeviceMemoryGb: number
+    recommendedAvailableStorageBytes: number
+  }
+  recommendedMemoryNotes: string
 }
 
-export type SqlResultRow = Record<string, string | number | boolean | null>
+export type GemmaCapabilitySnapshot = {
+  hasWebGpu: boolean
+  isSecureContext: boolean
+  cacheStorageAvailable: boolean
+  storageManagerAvailable: boolean
+  quotaBytes: number | null
+  usageBytes: number | null
+  availableStorageBytes: number | null
+  deviceMemoryGb: number | null
+  hardwareConcurrency: number | null
+}
 
-export type SqlGenerationResponse = {
-  status: ModelStatus
-  generatedSql: string | null
-  resultColumns: string[]
-  resultRows: SqlResultRow[]
+export type GemmaEnvironmentReport = {
+  lifecycle: GemmaEngineLifecycle
+  summary: string
+  detail: string
+  isOnDevice: boolean
+  hasStoredModel: boolean
+  capabilities: GemmaCapabilitySnapshot
   notices: string[]
-  errorMessage: string | null
 }
+
+export type SqlDraft = {
+  rawResponse: string
+  generatedSql: string | null
+  previewSql: string | null
+  normalizedSql: string | null
+  clarification: string | null
+  warnings: string[]
+  validationIssues: string[]
+  confidence: number | null
+  isExecutable: boolean
+}
+
+export type SqlExecutionResult = {
+  columns: string[]
+  rows: SqlResultRow[]
+  rowCount: number
+  truncated: boolean
+  notices: string[]
+}
+
+export type SqlAssistantFailure = {
+  scope:
+    | "environment"
+    | "download"
+    | "initialization"
+    | "generation"
+    | "validation"
+    | "execution"
+  message: string
+  detail?: string
+  recoverable: boolean
+}
+
+export type NaturalQueryExecutionRequest = {
+  sql: string
+}
+

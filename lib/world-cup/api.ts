@@ -11,6 +11,10 @@ import type {
   TeamSquadRow,
   TopScorerRow,
 } from "@/lib/world-cup/types"
+import type {
+  NaturalQueryExecutionRequest,
+  SqlExecutionResult,
+} from "@/lib/sql-assistant/types"
 
 const WORLD_CUP_PROXY_BASE = "/api/world-cup"
 
@@ -26,15 +30,25 @@ export class WorldCupApiError extends Error {
 }
 
 type RequestOptions = {
+  method?: "GET" | "POST"
+  body?: unknown
   signal?: AbortSignal
 }
 
 async function requestJson<T>(path: string, options: RequestOptions = {}) {
+  const headers: Record<string, string> = {
+    accept: "application/json",
+  }
+  const requestMethod = options.method ?? "GET"
+
+  if (options.body !== undefined) {
+    headers["content-type"] = "application/json"
+  }
+
   const response = await fetch(`${WORLD_CUP_PROXY_BASE}${path}`, {
-    method: "GET",
-    headers: {
-      accept: "application/json",
-    },
+    method: requestMethod,
+    headers,
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
     cache: "no-store",
     signal: options.signal,
   })
@@ -90,4 +104,15 @@ export const worldCupApi = {
     requestJson<TopScorerRow[]>(`/editions/${editionId}/top-scorers`, options),
   listTeamHistory: (teamId: number, options?: RequestOptions) =>
     requestJson<TeamHistoryRow[]>(`/teams/${teamId}/history`, options),
+  executeNaturalQuery: (
+    sql: string,
+    options?: Omit<RequestOptions, "method" | "body">
+  ) =>
+    requestJson<SqlExecutionResult>("/natural-query/execute", {
+      method: "POST",
+      body: {
+        sql,
+      } satisfies NaturalQueryExecutionRequest,
+      signal: options?.signal,
+    }),
 }
