@@ -56,7 +56,7 @@ export function TopScorersSection({ dashboard }: { dashboard: DashboardState }) 
       <SectionHeading
         eyebrow="Scoring output"
         title="Top scorers"
-        description="Goals count GOAL and PENALTY_GOAL only, matching the SQL-first business rules from the current schema."
+        description="Goals count GOAL and PENALTY_GOAL only, and every jump to team context now happens through real navigation."
         actions={
           <Input
             value={searchValue}
@@ -154,7 +154,11 @@ export function TopScorersSection({ dashboard }: { dashboard: DashboardState }) 
                   </TableHeader>
                   <TableBody>
                     {filteredRows.map((row) => (
-                      <TableRow key={row.player_id}>
+                      <TableRow
+                        key={row.player_id}
+                        className="cursor-pointer"
+                        onClick={() => dashboard.focusTeam(row.team_id, "history")}
+                      >
                         <TableCell>
                           <SemanticBadge
                             tone={row.rank_position === 1 ? "champion" : "neutral"}

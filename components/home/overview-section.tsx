@@ -300,7 +300,7 @@ export function OverviewSection({ dashboard }: { dashboard: DashboardState }) {
                     size="sm"
                     onClick={() => dashboard.focusGroup(group.group_id)}
                   >
-                    Open table
+                    Open route
                   </Button>
                 </div>
                 <div className="space-y-2">

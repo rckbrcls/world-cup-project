@@ -68,7 +68,7 @@ function TeamInspector({ dashboard }: { dashboard: DashboardState }) {
     return (
       <PanelEmptyState
         title="No team selected"
-        description="Select a team from the registry, ranking, or command menu to inspect current squad and history."
+        description="Open a team route from the registry, ranking, or command menu to inspect current squad and history."
       />
     )
   }
@@ -221,7 +221,7 @@ function MatchInspector({ dashboard }: { dashboard: DashboardState }) {
     return (
       <PanelEmptyState
         title="No match selected"
-        description="Pick a fixture or knockout match to inspect venue, score, and event timeline."
+        description="Open a match route from fixtures or knockout to inspect venue, score, and event timeline."
       />
     )
   }
@@ -461,7 +461,7 @@ export function InspectorPanel({ dashboard }: { dashboard: DashboardState }) {
       <CardHeader className="border-b border-border/70">
         <CardTitle>Inspector</CardTitle>
         <CardDescription>
-          Shared detail surface that follows the current operational selection.
+          Route-backed detail surface for the current workspace selection.
         </CardDescription>
       </CardHeader>
       <CardContent className="p-0">

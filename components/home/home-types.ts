@@ -1,0 +1,10 @@
+export type HomeSectionId =
+  | "database"
+  | "overview"
+  | "teams"
+  | "groups"
+  | "matches"
+  | "knockout"
+  | "top-scorers"
+  | "history"
+  | "natural-query"

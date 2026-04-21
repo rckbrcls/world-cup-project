@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 
 import { HomeCommandCenter } from "@/components/home/command-center"
 import { DatabaseSection } from "@/components/home/database-section"
@@ -18,6 +19,7 @@ import { NaturalQueryPanel } from "@/components/natural-query/natural-query-pane
 import {
   Breadcrumb,
   BreadcrumbItem,
+  BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
@@ -38,6 +40,8 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar"
 import { useWorldCupDashboard } from "@/hooks/use-world-cup-dashboard"
+import { buildDashboardHref } from "@/lib/home-routing"
+import { formatMatchLabel } from "@/lib/world-cup/format"
 
 function getSectionBadgeCount(
   dashboard: ReturnType<typeof useWorldCupDashboard>,
@@ -64,6 +68,33 @@ function getSectionBadgeCount(
 export function DashboardShell() {
   const dashboard = useWorldCupDashboard()
   const activeSection = homeSectionMap[dashboard.activeSection]
+  const activeDetailLabel = React.useMemo(() => {
+    switch (dashboard.activeSection) {
+      case "teams":
+      case "top-scorers":
+      case "history":
+        return (
+          dashboard.selectedTeam?.team_name ??
+          dashboard.teamHistory.data.at(0)?.team_name ??
+          null
+        )
+      case "groups":
+        return dashboard.selectedGroup
+          ? `Group ${dashboard.selectedGroup.group_letter}`
+          : null
+      case "matches":
+      case "knockout":
+        return dashboard.selectedMatch ? formatMatchLabel(dashboard.selectedMatch) : null
+      default:
+        return null
+    }
+  }, [
+    dashboard.activeSection,
+    dashboard.selectedGroup,
+    dashboard.selectedMatch,
+    dashboard.selectedTeam,
+    dashboard.teamHistory.data,
+  ])
 
   return (
     <SidebarProvider defaultOpen>
@@ -110,16 +141,22 @@ export function DashboardShell() {
                 {homeSections.map((section) => {
                   const Icon = section.icon
                   const badgeCount = getSectionBadgeCount(dashboard, section.id)
+                  const href = buildDashboardHref({
+                    section: section.id,
+                    editionId: dashboard.selectedEditionId,
+                  })
 
                   return (
                     <SidebarMenuItem key={section.id}>
                       <SidebarMenuButton
+                        asChild
                         isActive={dashboard.activeSection === section.id}
                         tooltip={section.label}
-                        onClick={() => dashboard.focusSection(section.id)}
                       >
-                        <Icon />
-                        <span>{section.label}</span>
+                        <Link href={href}>
+                          <Icon />
+                          <span>{section.label}</span>
+                        </Link>
                       </SidebarMenuButton>
                       {badgeCount !== null ? (
                         <SidebarMenuBadge>{badgeCount}</SidebarMenuBadge>
@@ -141,17 +178,54 @@ export function DashboardShell() {
               <div className="min-w-0">
                 <Breadcrumb>
                   <BreadcrumbList>
-                    <BreadcrumbItem>World Cup Ops</BreadcrumbItem>
-                    <BreadcrumbSeparator />
                     <BreadcrumbItem>
-                      <BreadcrumbPage>{activeSection.shortLabel}</BreadcrumbPage>
+                      <BreadcrumbLink asChild>
+                        <Link
+                          href={buildDashboardHref({
+                            section: "overview",
+                            editionId: dashboard.selectedEditionId,
+                          })}
+                        >
+                          World Cup Ops
+                        </Link>
+                      </BreadcrumbLink>
                     </BreadcrumbItem>
+                    <BreadcrumbSeparator />
+                    {activeDetailLabel ? (
+                      <>
+                        <BreadcrumbItem>
+                          <BreadcrumbLink asChild>
+                            <Link
+                              href={buildDashboardHref({
+                                section: dashboard.activeSection,
+                                editionId: dashboard.selectedEditionId,
+                              })}
+                            >
+                              {activeSection.shortLabel}
+                            </Link>
+                          </BreadcrumbLink>
+                        </BreadcrumbItem>
+                        <BreadcrumbSeparator />
+                        <BreadcrumbItem>
+                          <BreadcrumbPage>{activeDetailLabel}</BreadcrumbPage>
+                        </BreadcrumbItem>
+                      </>
+                    ) : (
+                      <BreadcrumbItem>
+                        <BreadcrumbPage>{activeSection.shortLabel}</BreadcrumbPage>
+                      </BreadcrumbItem>
+                    )}
                   </BreadcrumbList>
                 </Breadcrumb>
                 <div className="min-w-0">
                   <h1 className="truncate font-heading text-xl font-semibold tracking-tight text-foreground">
-                    {activeSection.label}
+                    {activeDetailLabel ?? activeSection.label}
                   </h1>
+                  {activeDetailLabel ? (
+                    <p className="truncate text-sm text-muted-foreground">
+                      {activeSection.label}
+                    </p>
+                  ) : null}
                 </div>
               </div>
 

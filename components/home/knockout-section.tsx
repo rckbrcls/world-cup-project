@@ -10,7 +10,6 @@ import {
   SemanticBadge,
 } from "@/components/home/panel-states"
 import { SectionHeading } from "@/components/home/section-heading"
-import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -77,7 +76,7 @@ export function KnockoutSection({ dashboard }: { dashboard: DashboardState }) {
                       <button
                         key={match.match_id}
                         type="button"
-                        onClick={() => dashboard.focusMatch(match.match_id)}
+                        onClick={() => dashboard.focusMatch(match.match_id, "knockout")}
                         className={[
                           "w-full rounded-lg border px-4 py-4 text-left transition-colors",
                           isSelected
@@ -116,9 +115,9 @@ export function KnockoutSection({ dashboard }: { dashboard: DashboardState }) {
                               </SemanticBadge>
                             ) : null}
                           </div>
-                          <Button variant="ghost" size="sm">
-                            Inspect match
-                          </Button>
+                          <span className="text-sm font-medium text-muted-foreground">
+                            Open route
+                          </span>
                         </div>
                       </button>
                     )

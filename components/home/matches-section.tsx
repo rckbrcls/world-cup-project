@@ -111,7 +111,7 @@ export function MatchesSection({ dashboard }: { dashboard: DashboardState }) {
       <SectionHeading
         eyebrow="Fixture control"
         title="Matches"
-        description="Every match row stays tied to the backend contract: phase, date, stadium, host city, score, penalties, and winner."
+        description="Every match row stays tied to the backend contract and now navigates directly to a route-backed match detail."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Input
@@ -182,7 +182,7 @@ export function MatchesSection({ dashboard }: { dashboard: DashboardState }) {
           <CardHeader className="border-b border-border/70">
             <CardTitle>Edition fixtures</CardTitle>
             <CardDescription>
-              Click any row to inspect events in the shared panel.
+              Click any row to move the route and open the selected fixture detail.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-4">

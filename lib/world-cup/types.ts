@@ -16,6 +16,7 @@ export type DatabaseStatus = {
   seed_functions_ready: boolean
   cleanup_function_ready: boolean
   synthetic_status_ready: boolean
+  inspection_warning: string | null
   has_active_batch: boolean
   active_batch_id: number | null
   dataset_key: string | null

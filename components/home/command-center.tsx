@@ -12,6 +12,8 @@ import {
   CommandSeparator,
   CommandShortcut,
 } from "@/components/ui/command"
+import { homeSections } from "@/components/home/home-config"
+import type { HomeSectionId } from "@/components/home/home-types"
 import type {
   GroupSummary,
 } from "@/lib/world-cup/selectors"
@@ -21,8 +23,6 @@ import type {
   EditionSummary,
   EditionTeamRow,
 } from "@/lib/world-cup/types"
-import { homeSections } from "@/components/home/home-config"
-import type { HomeSectionId } from "@/hooks/use-world-cup-dashboard"
 
 type HomeCommandCenterProps = {
   open: boolean

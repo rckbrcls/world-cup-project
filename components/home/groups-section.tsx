@@ -62,7 +62,7 @@ export function GroupsSection({ dashboard }: { dashboard: DashboardState }) {
       <SectionHeading
         eyebrow="Competition structure"
         title="Groups"
-        description="Group cards show roster composition first. The selected group then opens the calculated standings table from the SQL layer."
+        description="Group cards now work as route-backed navigation, and the standings table only opens when a group route is active."
         actions={
           <Input
             value={searchValue}
@@ -115,16 +115,18 @@ export function GroupsSection({ dashboard }: { dashboard: DashboardState }) {
                         size="sm"
                         onClick={() => dashboard.focusGroup(group.group_id)}
                       >
-                        {isSelected ? "Selected" : "Open"}
+                        {isSelected ? "Open route" : "Open"}
                       </Button>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-2 pt-4">
                     {group.teams.map((team) =>
                       team.team_id ? (
-                        <div
+                        <button
                           key={`${group.group_id}-${team.team_id}`}
-                          className="rounded-lg border border-border/70 bg-muted/20 px-3 py-3"
+                          type="button"
+                          onClick={() => dashboard.focusTeam(team.team_id!, "history")}
+                          className="w-full rounded-lg border border-border/70 bg-muted/20 px-3 py-3 text-left transition-colors hover:bg-background"
                         >
                           <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0">
@@ -135,15 +137,11 @@ export function GroupsSection({ dashboard }: { dashboard: DashboardState }) {
                                 {team.coach_name}
                               </p>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => dashboard.focusTeam(team.team_id!, "history")}
-                            >
-                              History
-                            </Button>
+                            <span className="text-sm font-medium text-muted-foreground">
+                              Open history
+                            </span>
                           </div>
-                        </div>
+                        </button>
                       ) : null
                     )}
                   </CardContent>
@@ -217,6 +215,8 @@ export function GroupsSection({ dashboard }: { dashboard: DashboardState }) {
                             ? "selected"
                             : undefined
                         }
+                        className="cursor-pointer"
+                        onClick={() => dashboard.focusTeam(row.team_id, "history")}
                       >
                         <TableCell>
                           <SemanticBadge

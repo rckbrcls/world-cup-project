@@ -53,7 +53,7 @@ export function HistorySection({ dashboard }: { dashboard: DashboardState }) {
             size="sm"
             onClick={() => dashboard.focusSection("teams")}
           >
-            Open teams registry
+            Open teams route
           </Button>
         }
       />

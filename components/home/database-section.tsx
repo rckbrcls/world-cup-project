@@ -237,12 +237,12 @@ export function DatabaseSection({ dashboard }: { dashboard: DashboardState }) {
         }
       />
 
-      {dashboard.databaseStatus.errorMessage ? (
+      {status?.inspection_warning || dashboard.databaseStatus.errorMessage ? (
         <Alert>
           <ShieldAlert />
           <AlertTitle>Database status warning</AlertTitle>
           <AlertDescription>
-            {dashboard.databaseStatus.errorMessage}
+            {status?.inspection_warning ?? dashboard.databaseStatus.errorMessage}
           </AlertDescription>
         </Alert>
       ) : null}

@@ -1,14 +1,14 @@
 "use client"
 
 import * as React from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 
+import type { HomeSectionId } from "@/components/home/home-types"
 import { useAsyncResource } from "@/hooks/use-async-resource"
+import { buildDashboardHref, parseDashboardPathname, parseEditionQuery } from "@/lib/home-routing"
 import { worldCupApi } from "@/lib/world-cup/api"
 import {
   buildOverviewMetrics,
-  getDefaultEditionTeamId,
-  getDefaultGroupId,
-  getDefaultMatchId,
   getLatestEdition,
   groupEditionGroups,
   groupMatchesByPhase,
@@ -20,17 +20,6 @@ import type {
   EditionSummary,
   EditionTeamRow,
 } from "@/lib/world-cup/types"
-
-export type HomeSectionId =
-  | "database"
-  | "overview"
-  | "teams"
-  | "groups"
-  | "matches"
-  | "knockout"
-  | "top-scorers"
-  | "history"
-  | "natural-query"
 
 function selectExistingOrDefault<TValue extends number | null>(
   currentValue: TValue,
@@ -45,20 +34,20 @@ function selectExistingOrDefault<TValue extends number | null>(
 }
 
 export function useWorldCupDashboard() {
-  const [activeSection, setActiveSection] =
-    React.useState<HomeSectionId>("overview")
-  const [preferredEditionId, setPreferredEditionId] =
-    React.useState<number | null>(null)
-  const [preferredTeamId, setPreferredTeamId] = React.useState<number | null>(
-    null
-  )
-  const [preferredGroupId, setPreferredGroupId] = React.useState<number | null>(
-    null
-  )
-  const [preferredMatchId, setPreferredMatchId] = React.useState<number | null>(
-    null
-  )
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [isCommandOpen, setIsCommandOpen] = React.useState(false)
+
+  const route = React.useMemo(
+    () => parseDashboardPathname(pathname),
+    [pathname]
+  )
+  const routeEditionId = React.useMemo(
+    () => parseEditionQuery(searchParams.get("edition")),
+    [searchParams]
+  )
+  const activeSection = route.section
 
   const health = useAsyncResource({
     key: ["health"],
@@ -84,11 +73,11 @@ export function useWorldCupDashboard() {
   const selectedEditionId = React.useMemo(
     () =>
       selectExistingOrDefault(
-        preferredEditionId,
+        routeEditionId,
         editions.data.map((edition) => edition.edition_id),
         getLatestEdition(editions.data)?.edition_id ?? null
       ),
-    [editions.data, preferredEditionId]
+    [editions.data, routeEditionId]
   )
 
   const selectedEdition = React.useMemo(() => {
@@ -138,29 +127,18 @@ export function useWorldCupDashboard() {
     [groups.data]
   )
 
-  const selectedTeamId = React.useMemo(
-    () =>
-      selectExistingOrDefault(
-        preferredTeamId,
-        teams.data.map((team) => team.team_id),
-        getDefaultEditionTeamId(selectedEdition, teams.data)
-      ),
-    [preferredTeamId, selectedEdition, teams.data]
-  )
+  const selectedTeamId =
+    activeSection === "teams" ||
+    activeSection === "top-scorers" ||
+    activeSection === "history"
+      ? route.detailId
+      : null
 
   const selectedTeam = React.useMemo(() => {
     return teams.data.find((team) => team.team_id === selectedTeamId) ?? null
   }, [selectedTeamId, teams.data])
 
-  const selectedGroupId = React.useMemo(
-    () =>
-      selectExistingOrDefault(
-        preferredGroupId,
-        groupedGroups.map((group) => group.group_id),
-        getDefaultGroupId(groupedGroups)
-      ),
-    [groupedGroups, preferredGroupId]
-  )
+  const selectedGroupId = activeSection === "groups" ? route.detailId : null
 
   const selectedGroup = React.useMemo(() => {
     return (
@@ -168,15 +146,10 @@ export function useWorldCupDashboard() {
     )
   }, [groupedGroups, selectedGroupId])
 
-  const selectedMatchId = React.useMemo(
-    () =>
-      selectExistingOrDefault(
-        preferredMatchId,
-        matches.data.map((match) => match.match_id),
-        getDefaultMatchId(matches.data)
-      ),
-    [matches.data, preferredMatchId]
-  )
+  const selectedMatchId =
+    activeSection === "matches" || activeSection === "knockout"
+      ? route.detailId
+      : null
 
   const selectedMatch = React.useMemo(() => {
     return matches.data.find((match) => match.match_id === selectedMatchId) ?? null
@@ -326,47 +299,69 @@ export function useWorldCupDashboard() {
     [runDatabaseMutation]
   )
 
-  const focusSection = React.useCallback((section: HomeSectionId) => {
-    React.startTransition(() => {
-      setActiveSection(section)
-      setIsCommandOpen(false)
-    })
-  }, [])
-
-  const focusTeam = React.useCallback(
-    (teamId: number, nextSection: HomeSectionId = "teams") => {
+  const navigate = React.useCallback(
+    (href: string) => {
       React.startTransition(() => {
-        setPreferredTeamId(teamId)
-        setActiveSection(nextSection)
+        router.push(href)
         setIsCommandOpen(false)
       })
     },
-    []
+    [router]
   )
 
-  const focusMatch = React.useCallback((matchId: number) => {
-    React.startTransition(() => {
-      setPreferredMatchId(matchId)
-      setActiveSection("matches")
-      setIsCommandOpen(false)
-    })
-  }, [])
+  const focusSection = React.useCallback((section: HomeSectionId) => {
+    navigate(
+      buildDashboardHref({
+        section,
+        editionId: selectedEditionId,
+      })
+    )
+  }, [navigate, selectedEditionId])
+
+  const focusTeam = React.useCallback(
+    (teamId: number, nextSection: HomeSectionId = "teams") => {
+      navigate(
+        buildDashboardHref({
+          section: nextSection,
+          detailId: teamId,
+          editionId: selectedEditionId,
+        })
+      )
+    },
+    [navigate, selectedEditionId]
+  )
+
+  const focusMatch = React.useCallback(
+    (matchId: number, nextSection: HomeSectionId = "matches") => {
+      navigate(
+        buildDashboardHref({
+          section: nextSection,
+          detailId: matchId,
+          editionId: selectedEditionId,
+        })
+      )
+    },
+    [navigate, selectedEditionId]
+  )
 
   const focusGroup = React.useCallback((groupId: number) => {
-    React.startTransition(() => {
-      setPreferredGroupId(groupId)
-      setActiveSection("groups")
-      setIsCommandOpen(false)
-    })
-  }, [])
+    navigate(
+      buildDashboardHref({
+        section: "groups",
+        detailId: groupId,
+        editionId: selectedEditionId,
+      })
+    )
+  }, [navigate, selectedEditionId])
 
   const focusEdition = React.useCallback((editionId: number) => {
-    React.startTransition(() => {
-      setPreferredEditionId(editionId)
-      setActiveSection("overview")
-      setIsCommandOpen(false)
-    })
-  }, [])
+    navigate(
+      buildDashboardHref({
+        section: "overview",
+        editionId,
+      })
+    )
+  }, [navigate])
 
   return {
     activeSection,

@@ -11,7 +11,7 @@ import {
   Users,
 } from "lucide-react"
 
-import type { HomeSectionId } from "@/hooks/use-world-cup-dashboard"
+import type { HomeSectionId } from "@/components/home/home-types"
 
 export type HomeSectionDefinition = {
   id: HomeSectionId

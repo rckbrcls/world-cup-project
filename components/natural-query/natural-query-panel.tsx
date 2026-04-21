@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { useSqlAssistant } from "@/hooks/use-sql-assistant"
-import type { HomeSectionId } from "@/hooks/use-world-cup-dashboard"
+import type { HomeSectionId } from "@/components/home/home-types"
 
 type NaturalQueryPanelProps = {
   section: HomeSectionId

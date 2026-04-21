@@ -103,7 +103,7 @@ export function TeamsSection({ dashboard }: { dashboard: DashboardState }) {
       <SectionHeading
         eyebrow="Competition registry"
         title="Teams"
-        description="The table stays dense and operational: current edition team list, coach ownership, group placement, and final rank from the SQL dataset."
+        description="The table stays dense and operational: click a row to move the route to that team and open its detail surface."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Input
