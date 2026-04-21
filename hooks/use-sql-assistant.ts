@@ -6,6 +6,7 @@ import * as React from "react"
 
 import {
   buildSqlPlanningPrompt,
+  buildSqlRepairPrompt,
   formatModelPrompt,
 } from "@/lib/sql-assistant/prompt-builder"
 import {
@@ -13,7 +14,12 @@ import {
   getNaturalQueryPlanningStreamUrl,
   getNaturalQueryStatus,
 } from "@/lib/services/sql-assistant/natural-query-service"
+import {
+  AUTO_REPAIR_USER_PROMPT_PREFIX,
+  isAutoRepairUserMessage,
+} from "@/lib/sql-assistant/types"
 import type {
+  NaturalQueryRepairContext,
   NaturalQueryExecutionErrorReason,
   NaturalQueryExecutionErrorScope,
   NaturalQueryProviderState,
@@ -34,6 +40,17 @@ type ActiveOperationKind = "refresh" | "generate" | "execute" | null
 type PendingPlanningRequest = {
   userPrompt: string
   context: SqlAssistantContext
+  origin: "initial" | "repair"
+  supersedesProposalId: string | null
+  repairContext: NaturalQueryRepairContext | null
+}
+
+type RepairRequestOptions = {
+  proposalId: string
+  proposal: SqlProposalRecord
+  failureScope: NaturalQueryExecutionErrorScope
+  failureDetail: string
+  failingSql: string
 }
 
 function isAbortError(error: unknown) {
@@ -59,7 +76,11 @@ function isExecutionErrorScope(
 function isExecutionErrorReason(
   value: unknown
 ): value is NaturalQueryExecutionErrorReason {
-  return value === "database-validator" || value === "database-runtime"
+  return (
+    value === "database-validator" ||
+    value === "database-preflight" ||
+    value === "database-runtime"
+  )
 }
 
 function toExecutionErrorMetadata(failure: SqlAssistantFailure) {
@@ -201,7 +222,7 @@ function buildPlanningHistory(options: {
         .join("")
         .trim()
 
-      if (userText) {
+      if (userText && !isAutoRepairUserMessage(userText)) {
         lastUserPrompt = userText
       }
     }
@@ -236,6 +257,39 @@ function buildPlanningHistory(options: {
   }
 }
 
+function buildValidationFailure(options: { draft: SqlDraft }): SqlAssistantFailure {
+  const { draft } = options
+
+  if (draft.validationReason === "database-validator") {
+    return {
+      scope: "validation",
+      reason: "database-validator",
+      message:
+        "PostgreSQL rejected this SQL proposal during the read-only validation step.",
+      detail: draft.validationDetail ?? draft.validationIssues.join(" "),
+      recoverable: true,
+    }
+  }
+
+  if (draft.validationReason === "database-preflight") {
+    return {
+      scope: "validation",
+      reason: "database-preflight",
+      message: "PostgreSQL rejected this SQL proposal before approval.",
+      detail: draft.validationDetail ?? draft.validationIssues.join(" "),
+      recoverable: true,
+    }
+  }
+
+  return {
+    scope: "validation",
+    message:
+      "The SQL proposal is visible, but it failed the local precheck for controlled execution.",
+    detail: draft.validationIssues.join(" "),
+    recoverable: true,
+  }
+}
+
 export function useSqlAssistant() {
   const [provider, setProvider] = React.useState<NaturalQueryProviderState | null>(
     null
@@ -255,6 +309,9 @@ export function useSqlAssistant() {
   const executionControllerRef = React.useRef<AbortController | null>(null)
   const pendingPlanningRequestRef = React.useRef<PendingPlanningRequest | null>(null)
   const planningFailureRef = React.useRef(false)
+  const requestRepairRef = React.useRef<
+    ((options: RepairRequestOptions) => Promise<true | null>) | null
+  >(null)
 
   const planningTransport = React.useMemo(
     () =>
@@ -287,6 +344,7 @@ export function useSqlAssistant() {
       }
     },
     onError: (error) => {
+      const pendingRequest = pendingPlanningRequestRef.current
       pendingPlanningRequestRef.current = null
       planningFailureRef.current = true
       setPlanningStatus(null)
@@ -295,7 +353,9 @@ export function useSqlAssistant() {
         toFailure(
           "generation",
           error,
-          "The configured Ollama model failed while planning SQL."
+          pendingRequest?.origin === "repair"
+            ? "The configured Ollama model failed while repairing the SQL proposal."
+            : "The configured Ollama model failed while planning SQL."
         )
       )
     },
@@ -350,6 +410,8 @@ export function useSqlAssistant() {
                 editionId: null,
                 editionYear: null,
               } satisfies SqlAssistantContext),
+            origin: pendingRequest?.origin ?? "initial",
+            supersedesProposalId: pendingRequest?.supersedesProposalId ?? null,
             draft,
             execution: null,
           },
@@ -357,13 +419,33 @@ export function useSqlAssistant() {
       })
 
       if (draft.validationIssues.length > 0) {
-        setFailure({
-          scope: "validation",
-          message:
-            "The SQL proposal is visible, but it failed the local precheck for controlled execution.",
-          detail: draft.validationIssues.join(" "),
-          recoverable: true,
-        })
+        const nextFailure = buildValidationFailure({ draft })
+
+        setFailure(nextFailure)
+
+        if (
+          pendingRequest?.origin === "initial" &&
+          draft.previewSql &&
+          !draft.clarification
+        ) {
+          void requestRepairRef.current?.({
+            proposalId: message.id,
+            proposal: {
+              messageId: message.id,
+              proposalState: "blocked-precheck",
+              userPrompt: pendingRequest.userPrompt,
+              context: pendingRequest.context,
+              origin: "initial",
+              supersedesProposalId: null,
+              draft,
+              execution: null,
+            },
+            failureScope: "validation",
+            failureDetail:
+              nextFailure.detail ?? nextFailure.message,
+            failingSql: draft.previewSql,
+          })
+        }
       } else {
         setFailure((currentFailure) =>
           currentFailure?.scope === "validation" ? null : currentFailure
@@ -414,21 +496,8 @@ export function useSqlAssistant() {
     void refreshEnvironment()
   }, [refreshEnvironment])
 
-  const sendPrompt = React.useCallback(
-    async (prompt: string, context: SqlAssistantContext) => {
-      const normalizedPrompt = prompt.trim()
-
-      if (!normalizedPrompt) {
-        setGenerationState("error")
-        setFailure({
-          scope: "generation",
-          message:
-            "Enter a natural-language request before asking the assistant to plan a SQL query.",
-          recoverable: true,
-        })
-        return null
-      }
-
+  const submitPlanningRequest = React.useCallback(
+    async (request: PendingPlanningRequest) => {
       if (provider?.status !== "ready") {
         const providerFailure = {
           scope: "environment" as const,
@@ -444,39 +513,54 @@ export function useSqlAssistant() {
       }
 
       const promptPack = formatModelPrompt(
-        buildSqlPlanningPrompt({
-          prompt: normalizedPrompt,
-          context,
-          history: buildPlanningHistory({
-            messages: planningChat.messages,
-            proposalRecords,
-          }),
-          modelName: provider.model,
-        })
+        request.origin === "repair" && request.repairContext
+          ? buildSqlRepairPrompt({
+              prompt: request.userPrompt,
+              context: request.context,
+              repair: request.repairContext,
+              modelName: provider.model,
+            })
+          : buildSqlPlanningPrompt({
+              prompt: request.userPrompt,
+              context: request.context,
+              history: buildPlanningHistory({
+                messages: planningChat.messages,
+                proposalRecords,
+              }),
+              modelName: provider.model,
+            })
       )
 
-      pendingPlanningRequestRef.current = {
-        userPrompt: normalizedPrompt,
-        context,
-      }
+      pendingPlanningRequestRef.current = request
       planningFailureRef.current = false
       setGenerationState("generating")
       setExecutionState("idle")
       setFailure(null)
       setPlanningStatus({
         phase: "planning",
-        summary: "Planning SQL with local Ollama",
+        summary:
+          request.origin === "repair"
+            ? "Repairing SQL proposal with local Ollama"
+            : "Planning SQL with local Ollama",
         detail:
-          "The assistant is streaming planning updates through the FastAPI backend.",
+          request.origin === "repair"
+            ? "The assistant is generating one repaired SQL proposal from PostgreSQL feedback."
+            : "The assistant is streaming planning updates through the FastAPI backend.",
         state: "running",
       })
 
       try {
         await planningChat.sendMessage(
-          { text: normalizedPrompt },
+          {
+            text:
+              request.origin === "repair"
+                ? `${AUTO_REPAIR_USER_PROMPT_PREFIX} ${request.userPrompt}`
+                : request.userPrompt,
+          },
           {
             body: {
               prompt: promptPack,
+              repairContext: request.repairContext ?? undefined,
             },
           }
         )
@@ -498,13 +582,69 @@ export function useSqlAssistant() {
           toFailure(
             "generation",
             error,
-            "The configured Ollama model failed while planning SQL."
+            request.origin === "repair"
+              ? "The configured Ollama model failed while repairing the SQL proposal."
+              : "The configured Ollama model failed while planning SQL."
           )
         )
         return null
       }
     },
-    [planningChat, provider]
+    [planningChat, proposalRecords, provider]
+  )
+
+  const requestRepair = React.useCallback(
+    async (options: RepairRequestOptions) => {
+      const { proposalId, proposal, failureScope, failureDetail, failingSql } = options
+
+      if (proposal.origin === "repair") {
+        return null
+      }
+
+      return submitPlanningRequest({
+        userPrompt: proposal.userPrompt,
+        context: proposal.context,
+        origin: "repair",
+        supersedesProposalId: proposalId,
+        repairContext: {
+          originalPrompt: proposal.userPrompt,
+          failingSql,
+          failureScope,
+          failureDetail,
+        },
+      })
+    },
+    [submitPlanningRequest]
+  )
+
+  React.useEffect(() => {
+    requestRepairRef.current = requestRepair
+  }, [requestRepair])
+
+  const sendPrompt = React.useCallback(
+    async (prompt: string, context: SqlAssistantContext) => {
+      const normalizedPrompt = prompt.trim()
+
+      if (!normalizedPrompt) {
+        setGenerationState("error")
+        setFailure({
+          scope: "generation",
+          message:
+            "Enter a natural-language request before asking the assistant to plan a SQL query.",
+          recoverable: true,
+        })
+        return null
+      }
+
+      return submitPlanningRequest({
+        userPrompt: normalizedPrompt,
+        context,
+        origin: "initial",
+        supersedesProposalId: null,
+        repairContext: null,
+      })
+    },
+    [submitPlanningRequest]
   )
 
   const dismissProposal = React.useCallback((messageId: string) => {
@@ -534,7 +674,7 @@ export function useSqlAssistant() {
         setFailure({
           scope: "validation",
           message:
-            "Only SQL proposals that passed the local precheck can be executed from the assistant drawer.",
+            "Only SQL proposals that passed the controlled validation checks can be executed from the assistant drawer.",
           recoverable: true,
         })
         return null
@@ -662,6 +802,17 @@ export function useSqlAssistant() {
             },
           }
         })
+
+        if (proposal.origin === "initial") {
+          void requestRepair({
+            proposalId: messageId,
+            proposal,
+            failureScope: "execution",
+            failureDetail: nextFailure.detail ?? nextFailure.message,
+            failingSql: proposal.draft.normalizedSql,
+          })
+        }
+
         return null
       } finally {
         if (executionControllerRef.current === controller) {
@@ -669,7 +820,7 @@ export function useSqlAssistant() {
         }
       }
     },
-    [proposalRecords]
+    [proposalRecords, requestRepair]
   )
 
   const clearThread = React.useCallback(() => {

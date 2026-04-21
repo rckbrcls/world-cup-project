@@ -1,5 +1,11 @@
 import type { UIMessage } from "ai"
 
+export const AUTO_REPAIR_USER_PROMPT_PREFIX = "[Auto repair]"
+
+export function isAutoRepairUserMessage(text: string) {
+  return text.startsWith(AUTO_REPAIR_USER_PROMPT_PREFIX)
+}
+
 export type NaturalQueryProviderStatus = "ready" | "unavailable"
 
 export type SqlPlanningStatusPhase =
@@ -67,6 +73,12 @@ export type SqlDraft = {
   clarification: string | null
   warnings: string[]
   validationIssues: string[]
+  validationReason:
+    | "local-precheck"
+    | "database-validator"
+    | "database-preflight"
+    | null
+  validationDetail: string | null
   confidence: number | null
   isExecutable: boolean
 }
@@ -83,6 +95,7 @@ export type NaturalQueryExecutionErrorScope = "validation" | "execution"
 
 export type NaturalQueryExecutionErrorReason =
   | "database-validator"
+  | "database-preflight"
   | "database-runtime"
 
 export type NaturalQueryExecutionErrorResponse = {
@@ -120,6 +133,13 @@ export type NaturalQueryGenerateResponse = {
   rawResponse: string
 }
 
+export type NaturalQueryRepairContext = {
+  originalPrompt: string
+  failingSql: string
+  failureScope: NaturalQueryExecutionErrorScope
+  failureDetail: string
+}
+
 export type NaturalQueryExecutionRequest = {
   sql: string
 }
@@ -154,6 +174,8 @@ export type SqlProposalRecord = {
   proposalState: SqlProposalState
   userPrompt: string
   context: SqlAssistantContext
+  origin: "initial" | "repair"
+  supersedesProposalId: string | null
   draft: SqlDraft
   execution: SqlExecutionRecord | null
 }

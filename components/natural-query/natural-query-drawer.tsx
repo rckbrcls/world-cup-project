@@ -45,13 +45,13 @@ import {
 } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { useSqlAssistant } from "@/hooks/use-sql-assistant"
+import { isAutoRepairUserMessage } from "@/lib/sql-assistant/types"
 import type {
   SqlAssistantContext,
   SqlAssistantUiMessage,
   SqlExecutionRecord,
   SqlProposalRecord,
 } from "@/lib/sql-assistant/types"
-import { cn } from "@/lib/utils"
 
 type NaturalQueryDrawerProps = SqlAssistantContext
 
@@ -79,7 +79,8 @@ function getProposalStateBadge(record: SqlProposalRecord) {
       return {
         tone: "destructive" as const,
         label:
-          record.execution?.errorReason === "database-validator"
+          record.execution?.errorReason === "database-validator" ||
+          record.execution?.errorReason === "database-preflight"
             ? "Rejected"
             : "Failed",
       }
@@ -89,17 +90,35 @@ function getProposalStateBadge(record: SqlProposalRecord) {
 }
 
 function getProposalValidationBadge(record: SqlProposalRecord) {
+  if (record.draft.validationReason === "database-validator") {
+    return {
+      tone: "destructive" as const,
+      label: "Database validation failed",
+    }
+  }
+
+  if (record.draft.validationReason === "database-preflight") {
+    return {
+      tone: "destructive" as const,
+      label: "Database preflight failed",
+    }
+  }
+
   if (record.proposalState === "blocked-precheck") {
     return { tone: "destructive" as const, label: "Precheck blocked" }
   }
 
   if (
     record.proposalState === "execution-failed" &&
-    record.execution?.errorReason === "database-validator"
+    (record.execution?.errorReason === "database-validator" ||
+      record.execution?.errorReason === "database-preflight")
   ) {
     return {
       tone: "destructive" as const,
-      label: "Database validation failed",
+      label:
+        record.execution?.errorReason === "database-preflight"
+          ? "Database preflight failed"
+          : "Database validation failed",
     }
   }
 
@@ -108,30 +127,40 @@ function getProposalValidationBadge(record: SqlProposalRecord) {
   }
 
   if (record.draft.isExecutable) {
-    return { tone: "success" as const, label: "Local precheck passed" }
+    return { tone: "success" as const, label: "Ready for approval" }
   }
 
   return { tone: "warning" as const, label: "Review required" }
 }
 
 function formatProposalDescription(record: SqlProposalRecord) {
+  const repairedPrefix =
+    record.origin === "repair"
+      ? "This repaired proposal supersedes an earlier SQL draft. "
+      : ""
+
   switch (record.proposalState) {
     case "blocked-precheck":
-      return "This proposal failed the local precheck and cannot be executed as-is."
+      return `${repairedPrefix}This proposal failed validation and cannot be executed as-is.`
     case "pending-approval":
-      return "Review the SQL, then decide whether to run it through the controlled backend path."
+      return `${repairedPrefix}Review the SQL, then decide whether to run it through the controlled backend path.`
     case "dismissed":
-      return "This proposal was dismissed and never reached execution."
+      return `${repairedPrefix}This proposal was dismissed and never reached execution.`
     case "executing":
-      return "The approved SQL is currently running through the controlled backend path."
+      return `${repairedPrefix}The approved SQL is currently running through the controlled backend path.`
     case "executed":
-      return "This proposal has already been executed."
+      return `${repairedPrefix}This proposal has already been executed.`
     case "execution-failed":
-      return record.execution?.errorReason === "database-validator"
-        ? "PostgreSQL rejected this SQL during the controlled validation step."
-        : "The approved SQL failed while running through the controlled backend path."
+      if (
+        record.execution?.errorReason === "database-validator" ||
+        record.execution?.errorReason === "database-preflight"
+      ) {
+        return `${repairedPrefix}PostgreSQL rejected this SQL before execution through the controlled backend path.`
+      }
+
+      return `${repairedPrefix}The query compiled, but it failed while running through the controlled backend path.`
     case "canceled":
-      return "Execution was canceled before the proposal could complete."
+      return `${repairedPrefix}Execution was canceled before the proposal could complete.`
   }
 }
 
@@ -145,11 +174,20 @@ function getExecutionErrorPresentation(execution: SqlExecutionRecord) {
     }
   }
 
+  if (execution.errorReason === "database-preflight") {
+    return {
+      title: "Execution blocked before run",
+      description:
+        execution.errorMessage ??
+        "PostgreSQL rejected the approved SQL during controlled preflight before the query could run.",
+    }
+  }
+
   return {
     title: "Execution failed",
     description:
       execution.errorMessage ??
-      "The approved SQL failed while running through the controlled backend flow.",
+      "The approved SQL compiled, but failed while running through the controlled backend flow.",
   }
 }
 
@@ -295,6 +333,9 @@ function ProposalCard({
             <SemanticBadge tone={proposalStateBadge.tone}>
               {proposalStateBadge.label}
             </SemanticBadge>
+            {record.origin === "repair" ? (
+              <SemanticBadge tone="warning">Repair</SemanticBadge>
+            ) : null}
             {record.draft.confidence != null ? (
               <SemanticBadge tone="neutral">
                 Confidence {(record.draft.confidence * 100).toFixed(0)}%
@@ -324,7 +365,13 @@ function ProposalCard({
         {record.draft.validationIssues.length ? (
           <Alert variant="destructive">
             <ShieldAlert />
-            <AlertTitle>Local precheck blocked execution</AlertTitle>
+            <AlertTitle>
+              {record.draft.validationReason === "database-validator"
+                ? "Database validation blocked approval"
+                : record.draft.validationReason === "database-preflight"
+                  ? "Database preflight blocked approval"
+                  : "Local precheck blocked approval"}
+            </AlertTitle>
             <AlertDescription>
               {record.draft.validationIssues.join(" ")}
             </AlertDescription>
@@ -405,6 +452,10 @@ function ConversationEntry({
   const text = extractMessageText(message)
 
   if (message.role === "user") {
+    if (isAutoRepairUserMessage(text)) {
+      return null
+    }
+
     return (
       <div className="flex justify-end">
         <div className="max-w-[85%] rounded-2xl rounded-br-md bg-primary px-4 py-3 text-sm text-primary-foreground">

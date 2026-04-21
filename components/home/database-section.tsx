@@ -307,10 +307,19 @@ export function DatabaseSection() {
         <div className="grid gap-4 xl:grid-cols-2">
           <DatabaseActionCard
             title="Initialize database"
-            description="Apply `sql/ddl.sql` and `sql/queries.sql` in one backend session."
+            description="Apply `sql/ddl.sql`, `sql/synthetic_support.sql`, and `sql/queries.sql` for the current database state."
             actionLabel="Initialize database"
             icon={Wrench}
-            disabled={isMutating || Boolean(status?.schema_exists)}
+            disabled={
+              isMutating ||
+              Boolean(
+                status?.schema_exists &&
+                  status?.reporting_layer_ready &&
+                  status?.seed_functions_ready &&
+                  status?.cleanup_function_ready &&
+                  status?.synthetic_status_ready,
+              )
+            }
             isPending={isMutating && dashboard.databaseMutation.action === "initialize"}
             onClick={handleInitialize}
           />
