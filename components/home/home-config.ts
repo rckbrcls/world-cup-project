@@ -74,7 +74,7 @@ export const homeSections: HomeSectionDefinition[] = [
     id: "natural-query",
     label: "Natural Query",
     shortLabel: "Query",
-    description: "Gemma 4 local SQL generation, review, and controlled execution.",
+    description: "Local Ollama SQL generation, review, and controlled execution.",
     icon: FileCode2,
   },
 ]

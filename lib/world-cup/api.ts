@@ -7,11 +7,16 @@ import type {
   GroupStandingRow,
   KnockoutMatchRow,
   MatchEventRow,
+  SyntheticDataOperationResult,
+  SyntheticDataStatus,
   TeamHistoryRow,
   TeamSquadRow,
   TopScorerRow,
 } from "@/lib/world-cup/types"
 import type {
+  NaturalQueryGenerateRequest,
+  NaturalQueryGenerateResponse,
+  NaturalQueryProviderState,
   NaturalQueryExecutionRequest,
   SqlExecutionResult,
 } from "@/lib/sql-assistant/types"
@@ -30,7 +35,7 @@ export class WorldCupApiError extends Error {
 }
 
 type RequestOptions = {
-  method?: "GET" | "POST"
+  method?: "GET" | "POST" | "DELETE"
   body?: unknown
   signal?: AbortSignal
 }
@@ -74,6 +79,18 @@ async function requestJson<T>(path: string, options: RequestOptions = {}) {
 export const worldCupApi = {
   health: (options?: RequestOptions) =>
     requestJson<ApiHealth>("/health", options),
+  getSyntheticDataStatus: (options?: RequestOptions) =>
+    requestJson<SyntheticDataStatus>("/synthetic-data/status", options),
+  populateSyntheticData: (options?: Omit<RequestOptions, "method" | "body">) =>
+    requestJson<SyntheticDataOperationResult>("/synthetic-data/populate", {
+      method: "POST",
+      signal: options?.signal,
+    }),
+  removeSyntheticData: (options?: Omit<RequestOptions, "method" | "body">) =>
+    requestJson<SyntheticDataOperationResult>("/synthetic-data", {
+      method: "DELETE",
+      signal: options?.signal,
+    }),
   listEditions: (options?: RequestOptions) =>
     requestJson<EditionSummary[]>("/editions", options),
   listEditionTeams: (editionId: number, options?: RequestOptions) =>
@@ -104,6 +121,19 @@ export const worldCupApi = {
     requestJson<TopScorerRow[]>(`/editions/${editionId}/top-scorers`, options),
   listTeamHistory: (teamId: number, options?: RequestOptions) =>
     requestJson<TeamHistoryRow[]>(`/teams/${teamId}/history`, options),
+  getNaturalQueryStatus: (options?: RequestOptions) =>
+    requestJson<NaturalQueryProviderState>("/natural-query/status", options),
+  generateNaturalQuery: (
+    prompt: string,
+    options?: Omit<RequestOptions, "method" | "body">
+  ) =>
+    requestJson<NaturalQueryGenerateResponse>("/natural-query/generate", {
+      method: "POST",
+      body: {
+        prompt,
+      } satisfies NaturalQueryGenerateRequest,
+      signal: options?.signal,
+    }),
   executeNaturalQuery: (
     sql: string,
     options?: Omit<RequestOptions, "method" | "body">

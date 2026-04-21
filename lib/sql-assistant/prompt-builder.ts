@@ -12,11 +12,12 @@ function formatContextLine(label: string, value: number | string | null | undefi
 export function buildSqlGenerationPrompt(options: {
   prompt: string
   context: SqlAssistantContext
+  modelName: string
 }) {
-  const { prompt, context } = options
+  const { prompt, context, modelName } = options
 
   return [
-    "You are Gemma 4 operating as a SQL generation engine for a PostgreSQL World Cup operations workspace.",
+    `You are the local Ollama model '${modelName}' operating as a SQL generation engine for a PostgreSQL World Cup operations workspace.`,
     "Return exactly one JSON object and nothing else.",
     "",
     'Required JSON shape: {"sql": string | null, "clarification": string | null, "warnings": string[], "confidence": number}',
@@ -44,4 +45,8 @@ export function buildSqlGenerationPrompt(options: {
     "User request:",
     prompt.trim(),
   ].join("\n")
+}
+
+export function formatModelPrompt(prompt: string) {
+  return prompt.trim()
 }

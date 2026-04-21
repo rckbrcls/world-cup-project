@@ -84,7 +84,7 @@ export function normalizeSqlForExecution(sql: string): NormalizedSqlResult {
   normalizedSql = normalizedSql.replace(/;+[\s\n]*$/g, "").trim()
 
   if (!normalizedSql) {
-    issues.push("Gemma 4 did not return executable SQL.")
+    issues.push("The model did not return executable SQL.")
     return {
       normalizedSql: null,
       issues,
@@ -151,7 +151,7 @@ export function parseSqlDraftFromModelResponse(rawResponse: string): SqlDraft {
       ? warnings
       : [
           ...warnings,
-          "Gemma 4 returned unstructured output. The SQL preview uses a fallback extraction path.",
+          "The model returned unstructured output. The SQL preview uses a fallback extraction path.",
         ]
 
   return {

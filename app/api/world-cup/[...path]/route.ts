@@ -74,3 +74,10 @@ export async function POST(
 ) {
   return forwardRequest(request, context)
 }
+
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ path: string[] }> }
+) {
+  return forwardRequest(request, context)
+}

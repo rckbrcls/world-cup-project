@@ -10,6 +10,28 @@ export type ApiHealth = {
   status: string
 }
 
+export type SyntheticDataStatus = {
+  has_active_batch: boolean
+  active_batch_id: number | null
+  dataset_key: string | null
+  edition_years: number[]
+  created_at: string | null
+  cleaned_at: string | null
+  table_counts: Record<string, number>
+  total_rows: number
+  history_batch_count: number
+}
+
+export type SyntheticDataOperationResult = {
+  operation: "populate" | "cleanup"
+  status: "seeded" | "already_seeded" | "cleaned" | "nothing_to_clean"
+  active_batch_id: number | null
+  edition_years: number[]
+  table_counts: Record<string, number>
+  total_rows: number
+  message: string
+}
+
 export type EditionSummary = {
   edition_id: number
   edition_year: number

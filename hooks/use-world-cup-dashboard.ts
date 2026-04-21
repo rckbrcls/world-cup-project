@@ -17,6 +17,8 @@ import type {
   EditionMatchRow,
   EditionSummary,
   EditionTeamRow,
+  SyntheticDataOperationResult,
+  SyntheticDataStatus,
 } from "@/lib/world-cup/types"
 
 export type HomeSectionId =
@@ -61,6 +63,12 @@ export function useWorldCupDashboard() {
     key: ["health"],
     initialData: null as { status: string } | null,
     load: (signal) => worldCupApi.health({ signal }),
+  })
+
+  const syntheticDataStatus = useAsyncResource({
+    key: ["synthetic-data-status"],
+    initialData: null as SyntheticDataStatus | null,
+    load: (signal) => worldCupApi.getSyntheticDataStatus({ signal }),
   })
 
   const editions = useAsyncResource({
@@ -199,6 +207,11 @@ export function useWorldCupDashboard() {
     load: (signal) => worldCupApi.listMatchEvents(selectedMatchId!, { signal }),
   })
 
+  const [syntheticMutationAction, setSyntheticMutationAction] =
+    React.useState<"populate" | "cleanup" | null>(null)
+  const [syntheticMutationErrorMessage, setSyntheticMutationErrorMessage] =
+    React.useState<string | null>(null)
+
   const overviewMetrics = React.useMemo(
     () =>
       buildOverviewMetrics({
@@ -219,6 +232,76 @@ export function useWorldCupDashboard() {
   const knockoutByPhase = React.useMemo(
     () => groupMatchesByPhase(knockout.data),
     [knockout.data]
+  )
+
+  const reloadAllData = React.useCallback(() => {
+    syntheticDataStatus.reload()
+    editions.reload()
+    teams.reload()
+    groups.reload()
+    standings.reload()
+    matches.reload()
+    knockout.reload()
+    topScorers.reload()
+    teamHistory.reload()
+    squad.reload()
+    matchEvents.reload()
+  }, [
+    editions,
+    groups,
+    knockout,
+    matchEvents,
+    matches,
+    squad,
+    standings,
+    syntheticDataStatus,
+    teamHistory,
+    teams,
+    topScorers,
+  ])
+
+  const runSyntheticMutation = React.useCallback(
+    async (
+      action: "populate" | "cleanup"
+    ): Promise<SyntheticDataOperationResult> => {
+      if (syntheticMutationAction !== null) {
+        throw new Error("A synthetic data operation is already in progress.")
+      }
+
+      setSyntheticMutationAction(action)
+      setSyntheticMutationErrorMessage(null)
+
+      try {
+        const result =
+          action === "populate"
+            ? await worldCupApi.populateSyntheticData()
+            : await worldCupApi.removeSyntheticData()
+
+        reloadAllData()
+        return result
+      } catch (error: unknown) {
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : "Unable to complete the synthetic data operation."
+
+        setSyntheticMutationErrorMessage(errorMessage)
+        throw error
+      } finally {
+        setSyntheticMutationAction(null)
+      }
+    },
+    [reloadAllData, syntheticMutationAction]
+  )
+
+  const populateSyntheticData = React.useCallback(
+    () => runSyntheticMutation("populate"),
+    [runSyntheticMutation]
+  )
+
+  const removeSyntheticData = React.useCallback(
+    () => runSyntheticMutation("cleanup"),
+    [runSyntheticMutation]
   )
 
   const focusSection = React.useCallback((section: HomeSectionId) => {
@@ -277,6 +360,12 @@ export function useWorldCupDashboard() {
     selectedMatchId,
     selectedMatch,
     health,
+    syntheticDataStatus,
+    syntheticDataMutation: {
+      action: syntheticMutationAction,
+      errorMessage: syntheticMutationErrorMessage,
+      isPending: syntheticMutationAction !== null,
+    },
     editions,
     teams,
     groups,
@@ -296,5 +385,8 @@ export function useWorldCupDashboard() {
     focusMatch,
     focusSection,
     focusTeam,
+    populateSyntheticData,
+    removeSyntheticData,
+    reloadAllData,
   }
 }

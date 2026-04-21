@@ -1,11 +1,32 @@
 "use client"
 
 import * as React from "react"
-import { Activity, Flag, Medal, Trophy } from "lucide-react"
+import {
+  Activity,
+  Database,
+  Flag,
+  Loader2,
+  Medal,
+  ShieldAlert,
+  Trash2,
+  Trophy,
+} from "lucide-react"
+import { toast } from "sonner"
 
 import { SemanticBadge } from "@/components/home/panel-states"
 import { SectionHeading } from "@/components/home/section-heading"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -19,6 +40,21 @@ import { formatKickoffDate, formatMatchLabel, formatNumber } from "@/lib/world-c
 import type { useWorldCupDashboard } from "@/hooks/use-world-cup-dashboard"
 
 type DashboardState = ReturnType<typeof useWorldCupDashboard>
+
+function formatSyntheticTimestamp(value: string | null) {
+  if (!value) {
+    return "Not available"
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value))
+}
+
+function formatTableLabel(tableName: string) {
+  return tableName.replaceAll("_", " ")
+}
 
 function MetricCard({
   label,
@@ -45,6 +81,277 @@ function MetricCard({
         </div>
         <div className="rounded-lg border border-border/80 bg-muted/30 p-2 text-muted-foreground">
           <Icon className="size-4" />
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function SyntheticDataCard({ dashboard }: { dashboard: DashboardState }) {
+  const [isRemoveDialogOpen, setIsRemoveDialogOpen] = React.useState(false)
+  const status = dashboard.syntheticDataStatus.data
+  const isStatusLoading =
+    dashboard.syntheticDataStatus.isLoading && dashboard.syntheticDataStatus.data === null
+  const isMutating = dashboard.syntheticDataMutation.isPending
+  const tableCounts = React.useMemo(
+    () =>
+      Object.entries(status?.table_counts ?? {}).sort(([left], [right]) =>
+        left.localeCompare(right)
+      ),
+    [status?.table_counts]
+  )
+
+  const handlePopulate = React.useCallback(async () => {
+    try {
+      const result = await dashboard.populateSyntheticData()
+
+      if (result.status === "already_seeded") {
+        toast.info(result.message)
+        return
+      }
+
+      toast.success(result.message)
+    } catch (error: unknown) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to populate synthetic data."
+      )
+    }
+  }, [dashboard])
+
+  const handleRemove = React.useCallback(async () => {
+    try {
+      const result = await dashboard.removeSyntheticData()
+      setIsRemoveDialogOpen(false)
+
+      if (result.status === "nothing_to_clean") {
+        toast.info(result.message)
+        return
+      }
+
+      toast.success(result.message)
+    } catch (error: unknown) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to remove synthetic data."
+      )
+    }
+  }, [dashboard])
+
+  const statusTone = isStatusLoading
+    ? "neutral"
+    : status?.has_active_batch
+      ? "success"
+      : status?.history_batch_count
+        ? "warning"
+        : "neutral"
+
+  const statusLabel = isStatusLoading
+    ? "Checking status"
+    : status?.has_active_batch
+      ? "Active synthetic batch"
+      : status?.history_batch_count
+        ? "No active batch"
+        : "No synthetic data yet"
+
+  return (
+    <Card className="border-border/80 shadow-none">
+      <CardHeader className="border-b border-border/70">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <CardTitle>Synthetic data control</CardTitle>
+              <SemanticBadge tone={statusTone}>{statusLabel}</SemanticBadge>
+            </div>
+            <CardDescription>
+              Canonical SQL-backed controls for seeding, tracking, and safely
+              cleaning the synthetic World Cup dataset.
+            </CardDescription>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={handlePopulate} disabled={isMutating}>
+              {isMutating && dashboard.syntheticDataMutation.action === "populate" ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <Database />
+              )}
+              Populate synthetic data
+            </Button>
+
+            <AlertDialog
+              open={isRemoveDialogOpen}
+              onOpenChange={setIsRemoveDialogOpen}
+            >
+              <Button
+                variant="destructive"
+                disabled={isMutating || !status?.has_active_batch}
+                onClick={() => setIsRemoveDialogOpen(true)}
+              >
+                {isMutating && dashboard.syntheticDataMutation.action === "cleanup" ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <Trash2 />
+                )}
+                Remove synthetic data
+              </Button>
+
+              <AlertDialogContent size="default">
+                <AlertDialogHeader>
+                  <AlertDialogMedia>
+                    <ShieldAlert className="size-5" />
+                  </AlertDialogMedia>
+                  <AlertDialogTitle>Remove synthetic dataset?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This cleanup only removes rows registered in the active
+                    synthetic batch. The operation is destructive and should be
+                    used when you want to return the database to a non-seeded
+                    state.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isMutating}>
+                    Cancel
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    variant="destructive"
+                    disabled={isMutating}
+                    onClick={handleRemove}
+                  >
+                    Confirm removal
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-4 pt-4">
+        {dashboard.syntheticDataStatus.errorMessage ? (
+          <Alert>
+            <ShieldAlert />
+            <AlertTitle>Synthetic data status failed</AlertTitle>
+            <AlertDescription>
+              {dashboard.syntheticDataStatus.errorMessage}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {dashboard.syntheticDataMutation.errorMessage ? (
+          <Alert>
+            <ShieldAlert />
+            <AlertTitle>Last synthetic operation failed</AlertTitle>
+            <AlertDescription>
+              {dashboard.syntheticDataMutation.errorMessage}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-3">
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Batch ID
+            </p>
+            <p className="mt-1 font-heading text-2xl font-semibold tracking-tight text-foreground">
+              {status?.active_batch_id ?? "None"}
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-3">
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Dataset key
+            </p>
+            <p className="mt-1 font-medium text-foreground">
+              {status?.dataset_key ?? "Not seeded"}
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-3">
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Edition years
+            </p>
+            <p className="mt-1 font-medium text-foreground">
+              {status?.edition_years.length
+                ? status.edition_years.join(", ")
+                : "None"}
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-3">
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Total rows
+            </p>
+            <p className="mt-1 font-heading text-2xl font-semibold tracking-tight text-foreground">
+              {formatNumber(status?.total_rows ?? 0)}
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-3">
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Batch history
+            </p>
+            <p className="mt-1 font-heading text-2xl font-semibold tracking-tight text-foreground">
+              {formatNumber(status?.history_batch_count ?? 0)}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+          <div className="space-y-3">
+            <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4">
+              <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Created at
+              </p>
+              <p className="mt-1 font-medium text-foreground">
+                {formatSyntheticTimestamp(status?.created_at ?? null)}
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4">
+              <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Last cleanup
+              </p>
+              <p className="mt-1 font-medium text-foreground">
+                {formatSyntheticTimestamp(status?.cleaned_at ?? null)}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-foreground">
+                Tracked row counts
+              </p>
+              <SemanticBadge tone="neutral">
+                {tableCounts.length} tables
+              </SemanticBadge>
+            </div>
+
+            {tableCounts.length ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {tableCounts.map(([tableName, rowCount]) => (
+                  <div
+                    key={tableName}
+                    className="rounded-lg border border-border/70 bg-muted/20 px-3 py-3"
+                  >
+                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                      {formatTableLabel(tableName)}
+                    </p>
+                    <p className="mt-1 font-heading text-2xl font-semibold tracking-tight text-foreground">
+                      {formatNumber(rowCount)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground">
+                No tracked synthetic rows are available yet.
+              </div>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -150,6 +457,8 @@ export function OverviewSection({ dashboard }: { dashboard: DashboardState }) {
           icon={Medal}
         />
       </div>
+
+      <SyntheticDataCard dashboard={dashboard} />
 
       <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr_0.8fr]">
         <Card className="border-border/80 shadow-none">

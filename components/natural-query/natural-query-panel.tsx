@@ -3,16 +3,12 @@
 import * as React from "react"
 import {
   AlertTriangle,
-  Bot,
   CheckCircle2,
-  Cpu,
   Database,
-  Download,
-  HardDriveDownload,
   LoaderCircle,
-  Pause,
   Play,
   RefreshCcw,
+  Server,
   ShieldAlert,
   Square,
 } from "lucide-react"
@@ -20,7 +16,6 @@ import {
 import {
   PanelEmptyState,
   PanelErrorState,
-  PanelUnsupportedState,
   SemanticBadge,
 } from "@/components/home/panel-states"
 import { SectionHeading } from "@/components/home/section-heading"
@@ -33,7 +28,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
 import {
   Table,
   TableBody,
@@ -45,7 +39,6 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { useSqlAssistant } from "@/hooks/use-sql-assistant"
 import type { HomeSectionId } from "@/hooks/use-world-cup-dashboard"
-import type { GemmaEngineLifecycle } from "@/lib/sql-assistant/types"
 
 type NaturalQueryPanelProps = {
   section: HomeSectionId
@@ -56,39 +49,15 @@ type NaturalQueryPanelProps = {
   groupId: number | null
 }
 
-const lifecycleToneMap: Record<
-  GemmaEngineLifecycle,
-  "neutral" | "warning" | "destructive" | "success"
-> = {
-  unavailable: "neutral",
-  unsupported: "destructive",
-  "not-downloaded": "warning",
-  "ready-to-download": "neutral",
-  downloading: "warning",
-  paused: "warning",
-  "download-error": "destructive",
-  initializing: "warning",
-  warming: "warning",
+const providerStatusToneMap = {
   ready: "success",
-  fallback: "destructive",
-}
+  unavailable: "destructive",
+} as const
 
-function formatBytes(value: number | null | undefined) {
-  if (value === null || value === undefined || Number.isNaN(value)) {
-    return "Unknown"
-  }
-
-  const units = ["B", "KB", "MB", "GB", "TB"]
-  let currentValue = value
-  let unitIndex = 0
-
-  while (currentValue >= 1024 && unitIndex < units.length - 1) {
-    currentValue /= 1024
-    unitIndex += 1
-  }
-
-  return `${currentValue.toFixed(currentValue >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`
-}
+const providerStatusLabelMap = {
+  ready: "Ready",
+  unavailable: "Unavailable",
+} as const
 
 function buildSelectionChips(props: NaturalQueryPanelProps) {
   return [
@@ -105,6 +74,14 @@ export function NaturalQueryPanel(props: NaturalQueryPanelProps) {
   const [prompt, setPrompt] = React.useState("")
   const selectionChips = buildSelectionChips(props)
   const draft = assistant.draft
+  const isCheckingProvider =
+    assistant.activeOperation === "refresh" && assistant.provider === null
+  const providerTone = isCheckingProvider
+    ? "neutral"
+    : providerStatusToneMap[assistant.providerStatus]
+  const providerLabel = isCheckingProvider
+    ? "Checking"
+    : providerStatusLabelMap[assistant.providerStatus]
 
   const handleGenerate = React.useCallback(async () => {
     await assistant.generateSql(prompt, {
@@ -119,7 +96,7 @@ export function NaturalQueryPanel(props: NaturalQueryPanelProps) {
 
   const statusActions = (
     <>
-      <SemanticBadge tone={lifecycleToneMap[assistant.lifecycle]}>
+      <SemanticBadge tone={providerTone}>
         {assistant.statusSummary}
       </SemanticBadge>
       <Button
@@ -140,18 +117,18 @@ export function NaturalQueryPanel(props: NaturalQueryPanelProps) {
       : assistant.executionState === "validating"
         ? "Validating SQL"
         : assistant.executionState === "running"
-        ? "Executing query"
-        : assistant.generationState === "canceled" ||
-            assistant.executionState === "canceled"
-          ? "Canceled"
-          : "Idle"
+          ? "Executing query"
+          : assistant.generationState === "canceled" ||
+              assistant.executionState === "canceled"
+            ? "Canceled"
+            : "Idle"
 
   return (
     <div className="space-y-6">
       <SectionHeading
-        eyebrow="On-device SQL"
+        eyebrow="Local SQL"
         title="Natural Query"
-        description="Gemma 4 stays secondary to the operational workspace: local model status, SQL preview, controlled execution, and tabular results remain visible in the same surface."
+        description="Local Ollama SQL stays secondary to the operational workspace: provider status, SQL preview, controlled execution, and tabular results remain visible in the same surface."
         actions={statusActions}
       />
 
@@ -172,152 +149,63 @@ export function NaturalQueryPanel(props: NaturalQueryPanelProps) {
             <CardHeader className="border-b border-border/70">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="space-y-1">
-                  <CardTitle>Model status</CardTitle>
+                  <CardTitle>Local model status</CardTitle>
                   <CardDescription>
-                    Gemma 4 runs as the primary local SQL engine when the browser
-                    environment supports on-device inference.
+                    Natural Query uses the configured local Ollama server for SQL
+                    generation while keeping SQL preview and controlled execution in
+                    the same operational surface.
                   </CardDescription>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <SemanticBadge tone="neutral">
-                    {assistant.manifest.label}
+                    {assistant.provider?.provider ?? "ollama"}
                   </SemanticBadge>
-                  <SemanticBadge
-                    tone={assistant.environment?.isOnDevice ? "qualified" : "neutral"}
-                  >
-                    Local / on-device
-                  </SemanticBadge>
+                  <SemanticBadge tone={providerTone}>{providerLabel}</SemanticBadge>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4 pt-4">
-              {assistant.lifecycle === "unsupported" ||
-              assistant.lifecycle === "fallback" ? (
-                <PanelUnsupportedState
-                  title={assistant.statusSummary}
-                  description={assistant.statusDetail}
-                />
-              ) : (
-                <>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <SemanticBadge tone={lifecycleToneMap[assistant.lifecycle]}>
-                      {assistant.lifecycle}
-                    </SemanticBadge>
-                    <span className="text-sm text-muted-foreground">
-                      {assistant.statusDetail}
-                    </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <SemanticBadge tone={providerTone}>{providerLabel}</SemanticBadge>
+                <span className="text-sm text-muted-foreground">
+                  {assistant.statusDetail}
+                </span>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
+                  <div className="mb-1 flex items-center gap-2 text-sm font-medium text-foreground">
+                    <Server className="size-4 text-muted-foreground" />
+                    Provider
                   </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
-                      <div className="mb-1 flex items-center gap-2 text-sm font-medium text-foreground">
-                        <Cpu className="size-4 text-muted-foreground" />
-                        Browser capability
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        WebGPU:{" "}
-                        {assistant.environment?.capabilities.hasWebGpu
-                          ? "available"
-                          : "missing"}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Secure context:{" "}
-                        {assistant.environment?.capabilities.isSecureContext
-                          ? "ready"
-                          : "required"}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
-                      <div className="mb-1 flex items-center gap-2 text-sm font-medium text-foreground">
-                        <HardDriveDownload className="size-4 text-muted-foreground" />
-                        Local capacity
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Available:{" "}
-                        {formatBytes(
-                          assistant.environment?.capabilities.availableStorageBytes
-                        )}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Recommended:{" "}
-                        {formatBytes(
-                          assistant.manifest.minBrowserCapabilities
-                            .recommendedAvailableStorageBytes
-                        )}
-                      </p>
-                    </div>
+                  <p className="text-sm text-muted-foreground">
+                    {assistant.provider?.provider ?? "ollama"}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Model: {assistant.provider?.model ?? "Unknown"}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
+                  <div className="mb-1 flex items-center gap-2 text-sm font-medium text-foreground">
+                    <Database className="size-4 text-muted-foreground" />
+                    Endpoint
                   </div>
+                  <p className="break-all text-sm text-muted-foreground">
+                    {assistant.provider?.baseUrl ?? "Unavailable"}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Generation runs through the existing backend proxy path.
+                  </p>
+                </div>
+              </div>
 
-                  {assistant.downloadProgress ? (
-                    <div className="space-y-2 rounded-lg border border-border/70 bg-muted/20 p-3">
-                      <div className="flex items-center justify-between gap-3 text-sm">
-                        <span className="font-medium text-foreground">
-                          Model download progress
-                        </span>
-                        <span className="text-muted-foreground">
-                          {assistant.downloadProgress.percent ?? "—"}%
-                        </span>
-                      </div>
-                      <Progress value={assistant.downloadProgress.percent ?? 0} />
-                      <p className="text-xs text-muted-foreground">
-                        {formatBytes(assistant.downloadProgress.downloadedBytes)} of{" "}
-                        {formatBytes(assistant.downloadProgress.totalBytes)}
-                      </p>
-                    </div>
-                  ) : null}
-
-                  <div className="flex flex-wrap gap-2">
-                    {assistant.canDownload ? (
-                      <Button
-                        variant="default"
-                        onClick={() => void assistant.downloadModel()}
-                      >
-                        <Download />
-                        Download model
-                      </Button>
-                    ) : null}
-                    {assistant.activeOperation === "download" ? (
-                      <Button variant="outline" onClick={assistant.pauseDownload}>
-                        <Pause />
-                        Pause download
-                      </Button>
-                    ) : null}
-                    {assistant.lifecycle === "paused" ? (
-                      <Button
-                        variant="outline"
-                        onClick={() => void assistant.resumeDownload()}
-                      >
-                        <Play />
-                        Resume download
-                      </Button>
-                    ) : null}
-                    {assistant.canInitialize ? (
-                      <Button
-                        variant="outline"
-                        onClick={() => void assistant.initializeModel()}
-                      >
-                        <Bot />
-                        Initialize Gemma 4
-                      </Button>
-                    ) : null}
-                    {assistant.isBusy &&
-                    assistant.activeOperation !== "download" ? (
-                      <Button variant="outline" onClick={assistant.cancelOperation}>
-                        <Square />
-                        Cancel
-                      </Button>
-                    ) : null}
-                  </div>
-
-                  {assistant.environment?.notices.length ? (
-                    <ul className="space-y-2 rounded-lg border border-border/70 bg-muted/20 p-3 text-sm text-muted-foreground">
-                      {assistant.environment.notices.map((notice) => (
-                        <li key={notice}>{notice}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </>
-              )}
+              {assistant.providerStatus === "unavailable" ? (
+                <Alert variant="destructive">
+                  <ShieldAlert />
+                  <AlertTitle>{assistant.statusSummary}</AlertTitle>
+                  <AlertDescription>{assistant.statusDetail}</AlertDescription>
+                </Alert>
+              ) : null}
             </CardContent>
           </Card>
 
@@ -326,7 +214,8 @@ export function NaturalQueryPanel(props: NaturalQueryPanelProps) {
               <CardTitle>Prompt</CardTitle>
               <CardDescription>
                 Ask for domain-specific SQL in plain language while staying anchored to
-                the current World Cup selection.
+                the current World Cup selection and the configured local Ollama
+                server.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 pt-4">
@@ -349,8 +238,9 @@ export function NaturalQueryPanel(props: NaturalQueryPanelProps) {
                     SQL generation workflow
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Status: {generationStatusLabel}. The prompt remains contextual and the
-                    generated SQL stays visible for review.
+                    Status: {generationStatusLabel}. The prompt remains contextual, the
+                    generated SQL stays visible for review, and execution remains a
+                    separate backend step.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -406,7 +296,7 @@ export function NaturalQueryPanel(props: NaturalQueryPanelProps) {
               <div className="rounded-lg border border-border/70 bg-muted/20 p-4">
                 <pre className="max-h-72 overflow-auto font-mono text-xs leading-6 whitespace-pre-wrap text-foreground">
                   {draft?.previewSql ??
-                    "No SQL draft yet. Initialize Gemma 4, submit a natural-language request, and the generated SQL will stay visible here."}
+                    "No SQL draft yet. Check the local Ollama status, submit a natural-language request, and the generated SQL will stay visible here."}
                 </pre>
               </div>
 
@@ -529,7 +419,7 @@ export function NaturalQueryPanel(props: NaturalQueryPanelProps) {
                     <TableBody>
                       {assistant.execution.rows.map((row, rowIndex) => (
                         <TableRow key={rowIndex}>
-                          {assistant.execution?.columns.map((column) => (
+                          {assistant.execution.columns.map((column) => (
                             <TableCell key={column}>
                               {String(row[column] ?? "—")}
                             </TableCell>
