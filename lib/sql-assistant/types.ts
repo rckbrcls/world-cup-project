@@ -1,4 +1,13 @@
+import type { UIMessage } from "ai"
+
 export type NaturalQueryProviderStatus = "ready" | "unavailable"
+
+export type SqlPlanningStatusPhase =
+  | "checking-provider"
+  | "planning"
+  | "finalizing"
+
+export type SqlPlanningStatusState = "running" | "success" | "error"
 
 export type SqlGenerationState =
   | "idle"
@@ -23,6 +32,17 @@ export type SqlAssistantContext = {
   teamId?: number | null
   matchId?: number | null
   groupId?: number | null
+}
+
+export type SqlPlanningHistory = {
+  lastUserPrompt: string | null
+  lastAssistantMessage: string | null
+  lastSqlProposal:
+    | {
+        sql: string
+        state: "approved" | "blocked"
+      }
+    | null
 }
 
 export type SqlResultCell = string | number | boolean | null
@@ -59,6 +79,30 @@ export type SqlExecutionResult = {
   notices: string[]
 }
 
+export type NaturalQueryExecutionErrorScope = "validation" | "execution"
+
+export type NaturalQueryExecutionErrorReason =
+  | "database-validator"
+  | "database-runtime"
+
+export type NaturalQueryExecutionErrorResponse = {
+  scope: NaturalQueryExecutionErrorScope
+  reason: NaturalQueryExecutionErrorReason
+  message: string
+  detail?: string
+}
+
+export type SqlPlanningStatusData = {
+  phase: SqlPlanningStatusPhase
+  summary: string
+  detail: string
+  state: SqlPlanningStatusState
+}
+
+export type SqlProposalStreamData = {
+  draft: SqlDraft
+}
+
 export type SqlAssistantFailure = {
   scope: "environment" | "generation" | "validation" | "execution" | "summary"
   reason?: string
@@ -81,11 +125,12 @@ export type NaturalQueryExecutionRequest = {
 }
 
 export type SqlProposalState =
+  | "blocked-precheck"
   | "pending-approval"
   | "dismissed"
   | "executing"
   | "executed"
-  | "failed"
+  | "execution-failed"
   | "canceled"
 
 export type SqlExecutionCardState =
@@ -94,6 +139,32 @@ export type SqlExecutionCardState =
   | "empty"
   | "error"
   | "canceled"
+
+export type SqlExecutionRecord = {
+  state: SqlExecutionCardState
+  sql: string
+  result: SqlExecutionResult | null
+  errorMessage: string | null
+  errorScope: NaturalQueryExecutionErrorScope | null
+  errorReason: NaturalQueryExecutionErrorReason | null
+}
+
+export type SqlProposalRecord = {
+  messageId: string
+  proposalState: SqlProposalState
+  userPrompt: string
+  context: SqlAssistantContext
+  draft: SqlDraft
+  execution: SqlExecutionRecord | null
+}
+
+export type SqlAssistantUiMessage = UIMessage<
+  never,
+  {
+    sqlStatus: SqlPlanningStatusData
+    sqlProposal: SqlProposalStreamData
+  }
+>
 
 type SqlAssistantThreadEntryBase = {
   id: string
@@ -138,6 +209,8 @@ export type SqlAssistantExecutionResultEntry = SqlAssistantThreadEntryBase & {
   sql: string
   result: SqlExecutionResult | null
   errorMessage: string | null
+  errorScope: NaturalQueryExecutionErrorScope | null
+  errorReason: NaturalQueryExecutionErrorReason | null
 }
 
 export type SqlAssistantThreadEntry =

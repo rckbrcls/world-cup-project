@@ -36,17 +36,17 @@ type SemanticBadgeTone =
 
 const semanticBadgeToneClasses: Record<SemanticBadgeTone, string> = {
   neutral:
-    "border-border bg-muted/70 text-muted-foreground dark:bg-muted/40 dark:text-muted-foreground",
+    "border-border/80 bg-muted/80 text-muted-foreground dark:bg-muted/45 dark:text-muted-foreground",
   success:
-    "border-success/20 bg-success/12 text-success dark:border-success/30 dark:bg-success/18 dark:text-success",
+    "border-success/25 bg-success/12 text-success dark:border-success/35 dark:bg-success/18 dark:text-success",
   warning:
-    "border-warning/20 bg-warning/12 text-warning dark:border-warning/30 dark:bg-warning/18 dark:text-warning",
+    "border-warning/25 bg-warning/14 text-warning dark:border-warning/35 dark:bg-warning/18 dark:text-warning",
   destructive:
-    "border-destructive/20 bg-destructive/10 text-destructive dark:border-destructive/30 dark:bg-destructive/16 dark:text-destructive",
+    "border-destructive/25 bg-destructive/12 text-destructive dark:border-destructive/35 dark:bg-destructive/18 dark:text-destructive",
   champion:
-    "border-champion/25 bg-champion/12 text-champion dark:border-champion/35 dark:bg-champion/16 dark:text-champion",
+    "border-champion/30 bg-champion/14 text-champion dark:border-champion/40 dark:bg-champion/18 dark:text-champion",
   qualified:
-    "border-qualified/25 bg-qualified/12 text-qualified dark:border-qualified/35 dark:bg-qualified/18 dark:text-qualified",
+    "border-qualified/28 bg-qualified/12 text-qualified dark:border-qualified/38 dark:bg-qualified/18 dark:text-qualified",
 }
 
 function PanelStateFrame({

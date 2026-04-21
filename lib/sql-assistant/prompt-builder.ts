@@ -1,6 +1,7 @@
 import { buildSchemaCatalogPrompt } from "@/lib/sql-assistant/schema-catalog"
 import type {
   SqlAssistantContext,
+  SqlPlanningHistory,
   SqlExecutionResult,
 } from "@/lib/sql-assistant/types"
 
@@ -26,12 +27,21 @@ function serializeResultPreview(result: SqlExecutionResult) {
   )
 }
 
+function formatHistoryLine(label: string, value: string | null) {
+  if (!value) {
+    return `- ${label}: none`
+  }
+
+  return `- ${label}: ${value}`
+}
+
 export function buildSqlPlanningPrompt(options: {
   prompt: string
   context: SqlAssistantContext
+  history: SqlPlanningHistory
   modelName: string
 }) {
-  const { prompt, context, modelName } = options
+  const { prompt, context, history, modelName } = options
 
   return [
     `You are the local Ollama model '${modelName}' operating inside a PostgreSQL World Cup operations workspace.`,
@@ -43,9 +53,15 @@ export function buildSqlPlanningPrompt(options: {
     "Planning rules:",
     "- You are not a general chatbot. Your role is to decide whether a database query is needed and propose it.",
     "- Produce one read-only PostgreSQL statement only when the request can be answered from the database.",
-    "- The SQL must target the world_cup schema and prefer curated reporting surfaces when they fit.",
+    "- The SQL must target the world_cup schema and prefer curated reporting surfaces whenever they fit the request.",
     "- Allowed statement forms: SELECT or WITH ... SELECT.",
+    "- The caller enforces a JSON schema, so every field in the response must match the required shape exactly.",
     "- Never emit comments, markdown fences, transaction commands, DDL, DML, GRANT/REVOKE, COPY, or admin commands.",
+    "- If a curated SQL function or view answers the request, use it instead of recreating joins manually.",
+    "- Do not invent columns, table names, or event labels that are not present in the schema catalog below.",
+    "- If the request needs an identifier that is missing from the current context, ask for clarification instead of guessing IDs.",
+    "- Resolve short follow-up requests by using the recent drawer history below before asking for clarification.",
+    "- Treat 'latest edition' or 'last edition' as the edition with the highest edition_year unless the operator explicitly says otherwise.",
     "- assistantMessage must briefly explain what the query is intended to retrieve for the operator.",
     "- If the request is ambiguous or underspecified, set sql to null and provide a concise clarification question grounded in the World Cup domain.",
     "- warnings should contain zero or more short review notes for the operator.",
@@ -59,6 +75,16 @@ export function buildSqlPlanningPrompt(options: {
     formatContextLine("team_id", context.teamId),
     formatContextLine("match_id", context.matchId),
     formatContextLine("group_id", context.groupId),
+    "",
+    "Recent drawer history:",
+    formatHistoryLine("last_user_request", history.lastUserPrompt),
+    formatHistoryLine("last_assistant_message", history.lastAssistantMessage),
+    formatHistoryLine(
+      "last_sql_proposal",
+      history.lastSqlProposal
+        ? `${history.lastSqlProposal.state}: ${history.lastSqlProposal.sql}`
+        : null
+    ),
     "",
     buildSchemaCatalogPrompt(),
     "",

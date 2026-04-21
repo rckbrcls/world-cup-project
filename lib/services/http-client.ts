@@ -2,10 +2,27 @@ export class ApiRequestError extends Error {
   constructor(
     message: string,
     readonly statusCode: number,
-    readonly path: string
+    readonly path: string,
+    readonly metadata?: {
+      detail?: string
+      reason?: string
+      scope?: string
+    }
   ) {
     super(message)
     this.name = "ApiRequestError"
+  }
+
+  get detail() {
+    return this.metadata?.detail
+  }
+
+  get reason() {
+    return this.metadata?.reason
+  }
+
+  get scope() {
+    return this.metadata?.scope
   }
 }
 

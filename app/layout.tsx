@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import { Barlow_Condensed, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google"
 
 import "./globals.css"
@@ -23,6 +24,14 @@ const fontMono = IBM_Plex_Mono({
   weight: ["400", "500", "600"],
   variable: "--font-mono",
 })
+
+export const metadata: Metadata = {
+  icons: {
+    icon: "/trophy.png",
+    shortcut: "/trophy.png",
+    apple: "/trophy.png",
+  },
+}
 
 export default function RootLayout({
   children,

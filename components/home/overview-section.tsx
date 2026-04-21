@@ -38,7 +38,7 @@ function MetricCard({
   icon: React.ComponentType<{ className?: string }>
 }) {
   return (
-    <Card className="border-border/80 shadow-none">
+    <Card className="border-primary/12 bg-card shadow-none">
       <CardContent className="flex items-start justify-between gap-3 py-4">
         <div className="space-y-1">
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
@@ -49,7 +49,7 @@ function MetricCard({
           </p>
           <p className="text-sm text-muted-foreground">{meta}</p>
         </div>
-        <div className="rounded-lg border border-border/80 bg-muted/30 p-2 text-muted-foreground">
+        <div className="rounded-lg border border-primary/15 bg-primary/8 p-2 text-primary">
           <Icon className="size-4" />
         </div>
       </CardContent>
@@ -229,7 +229,8 @@ export function OverviewSection({
               {podium.map((entry, index) => (
                 <div
                   key={entry.label}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/20 px-3 py-3"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/20 px-3 py-3 data-[tone=champion]:border-champion/25 data-[tone=champion]:bg-champion/10 data-[tone=qualified]:border-qualified/20 data-[tone=qualified]:bg-qualified/8"
+                  data-tone={entry.tone}
                 >
                   <div className="space-y-1">
                     <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -243,8 +244,8 @@ export function OverviewSection({
             </CardContent>
           </Card>
 
-          <Card className="border-border/80 shadow-none">
-            <CardHeader className="border-b border-border/70">
+          <Card className="border-primary/15 shadow-none">
+            <CardHeader className="border-b border-primary/12">
               <CardTitle>Final spotlight</CardTitle>
               <CardDescription>
                 The latest final match is promoted as the default operational anchor.
@@ -271,7 +272,7 @@ export function OverviewSection({
                       ) : null}
                     </div>
                   </div>
-                  <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-5">
+                  <div className="rounded-lg border border-primary/15 bg-primary/6 px-4 py-5">
                     <div className="flex items-end justify-between gap-4">
                       <div>
                         <p className="text-sm text-muted-foreground">
@@ -305,7 +306,7 @@ export function OverviewSection({
             </CardContent>
           </Card>
 
-          <Card className="border-border/80 shadow-none">
+          <Card className="border-primary/12 shadow-none">
             <CardHeader className="border-b border-border/70">
               <CardTitle>Leading scorer</CardTitle>
               <CardDescription>
@@ -323,7 +324,7 @@ export function OverviewSection({
                       {dashboard.overviewMetrics.leadingScorer.team_name}
                     </p>
                   </div>
-                  <div className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/20 px-3 py-3">
+                  <div className="flex items-center justify-between rounded-lg border border-primary/15 bg-primary/6 px-3 py-3">
                     <span className="text-sm text-muted-foreground">Goals</span>
                     <span className="font-heading text-3xl font-semibold tabular-nums text-foreground">
                       {formatNumber(dashboard.overviewMetrics.leadingScorer.total_goals)}
@@ -362,7 +363,7 @@ export function OverviewSection({
               {highlightedGroups.map((group) => (
                 <div
                   key={group.group_id}
-                  className="rounded-lg border border-border/70 bg-muted/20 p-4"
+                  className="rounded-lg border border-primary/12 bg-muted/20 p-4"
                 >
                   <div className="mb-3 flex items-center justify-between">
                     <p className="font-heading text-lg font-semibold tracking-tight text-foreground">
@@ -383,7 +384,7 @@ export function OverviewSection({
                           key={`${group.group_id}-${team.team_id}`}
                           type="button"
                           onClick={() => navigation.focusTeam(team.team_id!, "teams")}
-                          className="flex w-full items-center justify-between rounded-md border border-transparent px-2 py-2 text-left transition-colors hover:border-border hover:bg-background"
+                          className="flex w-full items-center justify-between rounded-md border border-transparent px-2 py-2 text-left transition-colors hover:border-primary/15 hover:bg-primary/5"
                         >
                           <span className="font-medium text-foreground">
                             {team.team_name}
@@ -413,7 +414,7 @@ export function OverviewSection({
                   <button
                     type="button"
                     onClick={() => navigation.focusMatch(match.match_id)}
-                    className="flex w-full items-center justify-between gap-4 rounded-md px-1 py-2 text-left transition-colors hover:bg-muted/30"
+                    className="flex w-full items-center justify-between gap-4 rounded-md px-1 py-2 text-left transition-colors hover:bg-primary/5"
                   >
                     <div className="space-y-1">
                       <p className="font-medium text-foreground">

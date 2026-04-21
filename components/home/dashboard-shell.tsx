@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { ChevronLeft } from "lucide-react"
 
@@ -34,6 +35,7 @@ import { Button } from "@/components/ui/button"
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -175,6 +177,12 @@ export function DashboardShell() {
   )
 
   const activeSection = homeSectionMap[navigation.activeSection]
+  const databaseSection = homeSectionMap.database
+  const DatabaseSectionIcon = databaseSection.icon
+  const workspaceSections = React.useMemo(
+    () => homeSections.filter((section) => section.id !== "database"),
+    []
+  )
   const sectionIndexHref = React.useMemo(
     () =>
       buildDashboardHref({
@@ -288,10 +296,15 @@ export function DashboardShell() {
       <Sidebar variant="inset" collapsible="icon">
         <SidebarHeader className="px-3 py-4 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-2">
           <div className="flex min-h-12 items-center gap-3 overflow-hidden px-1 text-sidebar-foreground transition-[gap,padding] duration-200 ease-linear group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-sidebar-border/80 bg-sidebar-accent text-sidebar-foreground">
-              <span className="font-heading text-lg font-semibold tracking-[0.08em]">
-                WC
-              </span>
+            <div className="flex shrink-0 items-center justify-center">
+              <Image
+                src="/trophy.png"
+                alt="World Cup trophy"
+                width={34}
+                height={34}
+                className="h-[34px] w-[34px] object-contain"
+                priority
+              />
             </div>
             <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
               <p className="truncate font-heading text-lg font-semibold tracking-tight text-sidebar-foreground">
@@ -306,7 +319,7 @@ export function DashboardShell() {
             <SidebarGroupLabel>Workspace</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {homeSections.map((section) => {
+                {workspaceSections.map((section) => {
                   const Icon = section.icon
                   const badgeState = getSectionBadgeState(
                     {
@@ -330,6 +343,7 @@ export function DashboardShell() {
                         asChild
                         isActive={navigation.activeSection === section.id}
                         tooltip={section.label}
+                        className="border border-transparent text-sidebar-foreground/80 hover:border-sidebar-primary/15 hover:bg-sidebar-primary/8 hover:text-sidebar-foreground data-[active=true]:border-sidebar-primary/35 data-[active=true]:bg-sidebar-primary data-[active=true]:text-sidebar-primary-foreground"
                       >
                         <Link href={href}>
                           <Icon />
@@ -337,7 +351,7 @@ export function DashboardShell() {
                         </Link>
                       </SidebarMenuButton>
                       {badgeState !== null ? (
-                        <SidebarMenuBadge>
+                        <SidebarMenuBadge className="rounded-full bg-sidebar-primary/10 px-1.5 text-sidebar-foreground/70 peer-data-active/menu-button:bg-sidebar-primary-foreground/14 peer-data-active/menu-button:text-sidebar-primary-foreground">
                           {badgeState.isLoading ? (
                             <BadgeSkeleton className="h-4 w-8 rounded-md" />
                           ) : (
@@ -352,13 +366,35 @@ export function DashboardShell() {
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
+        <SidebarFooter className="mt-auto border-t border-sidebar-border/70 pt-2">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={navigation.activeSection === databaseSection.id}
+                tooltip={databaseSection.label}
+                className="border border-transparent text-sidebar-foreground/80 hover:border-sidebar-primary/15 hover:bg-sidebar-primary/8 hover:text-sidebar-foreground data-[active=true]:border-sidebar-primary/35 data-[active=true]:bg-sidebar-primary data-[active=true]:text-sidebar-primary-foreground"
+              >
+                <Link
+                  href={buildDashboardHref({
+                    section: databaseSection.id,
+                    editionId: navigation.selectedEditionId,
+                  })}
+                >
+                  <DatabaseSectionIcon />
+                  <span>{databaseSection.label}</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
         <SidebarRail />
       </Sidebar>
 
       <SidebarInset className="min-h-svh bg-background shadow-none md:peer-data-[variant=inset]:m-0 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-none md:peer-data-[variant=inset]:shadow-none md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-0">
         <div className="flex min-h-svh flex-col">
           <header className="sticky top-0 z-20 px-4 pt-4 lg:px-6">
-            <div className="flex min-h-16 flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card px-4 py-3 lg:px-6">
+            <div className="flex min-h-16 flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/12 bg-card px-4 py-3 lg:px-6">
               <div className="min-w-0">
                 <div className="flex items-start gap-1">
                   {navigation.isDetailRoute ? (
@@ -407,14 +443,16 @@ export function DashboardShell() {
                                 {isActiveDetailLoading ? (
                                   <Skeleton className="h-4 w-32" />
                                 ) : (
-                                  activeDetailLabel
+                                  <span className="text-primary">{activeDetailLabel}</span>
                                 )}
                               </BreadcrumbPage>
                             </BreadcrumbItem>
                           </>
                         ) : (
                           <BreadcrumbItem>
-                            <BreadcrumbPage>{activeSection.shortLabel}</BreadcrumbPage>
+                            <BreadcrumbPage className="text-primary">
+                              {activeSection.shortLabel}
+                            </BreadcrumbPage>
                           </BreadcrumbItem>
                         )}
                       </BreadcrumbList>

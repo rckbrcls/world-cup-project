@@ -1,32 +1,33 @@
 const coreTables = [
   "confederation(id, name, code)",
-  "country(id, name, confederation_id)",
-  "team(id, name, country_id)",
-  "coach(id, full_name, country_id)",
+  "country(id, name, fifa_code, confederation_id)",
+  "team(id, name, fifa_code, country_id)",
+  "coach(id, full_name, birth_date, country_id)",
   "referee(id, full_name, country_id)",
-  "player(id, full_name, birth_date, country_id, preferred_position)",
+  "player(id, full_name, birth_date, primary_position, country_of_birth_id)",
   "world_cup_edition(id, year, host_country_id, start_date, end_date, champion_team_id, vice_champion_team_id, third_place_team_id)",
   "host_city(id, name, country_id)",
   "stadium(id, name, host_city_id, capacity)",
   "edition_host_city(edition_id, host_city_id)",
-  "competition_phase(id, code, display_name, phase_kind, allows_draw)",
-  "edition_phase(id, edition_id, phase_id, stage_order)",
+  "competition_phase(id, code, display_name, phase_kind, sort_order, allows_draw)",
+  "edition_phase(id, edition_id, phase_id, label, stage_order)",
   "team_group(id, edition_id, group_letter)",
   "edition_team(id, edition_id, team_id, coach_id, group_id, final_rank)",
-  "team_call_up(id, edition_id, team_id, player_id, shirt_number, squad_role, primary_position, is_captain)",
-  "match_game(id, edition_id, edition_phase_id, group_id, stadium_id, kickoff_at, home_team_id, away_team_id, winner_team_id, scores..., match_day)",
-  "match_official(id, match_id, referee_id, role)",
+  "team_call_up(edition_id, team_id, player_id, shirt_number, squad_role, primary_position, is_captain)",
+  "match_game(id, edition_id, edition_phase_id, group_id, stadium_id, kickoff_at, home_team_id, away_team_id, winner_team_id, home_score, away_score, home_extra_score, away_extra_score, home_penalty_score, away_penalty_score, match_day)",
+  "match_official(match_id, referee_id, role)",
   "match_event(id, match_id, event_minute, stoppage_minute, event_type, team_id, player_id, related_player_id, description)",
 ]
 
 const curatedViews = [
-  "world_cup.vw_match_scoreboard: match-level reporting surface with edition, phase, group, stadium, teams, final goals, penalty scores, and winner.",
-  "world_cup.vw_match_team_summary: team-level match summary with opponent, result, goals for/against, and group-stage points.",
+  "world_cup.vw_match_scoreboard(match_id, edition_id, edition_year, stage_order, phase_code, phase_name, phase_kind, group_letter, match_day, kickoff_at, stadium_name, host_city_name, home_team_id, home_team_name, away_team_id, away_team_name, winner_team_id, winner_team_name, home_score, away_score, home_extra_score, away_extra_score, home_penalty_score, away_penalty_score, final_home_goals, final_away_goals)",
+  "world_cup.vw_match_team_summary(match_id, edition_id, edition_year, phase_code, phase_name, phase_kind, group_letter, kickoff_at, team_id, team_name, opponent_team_id, opponent_team_name, goals_for, goals_against, result, points)",
 ]
 
 const curatedFunctions = [
   "world_cup.fn_list_editions()",
   "world_cup.fn_list_edition_teams(p_edition_id)",
+  "world_cup.fn_list_all_edition_teams()",
   "world_cup.fn_list_edition_groups(p_edition_id)",
   "world_cup.fn_group_standings(p_group_id)",
   "world_cup.fn_list_edition_matches(p_edition_id)",
@@ -55,6 +56,21 @@ const domainVocabulary = [
   "team history",
 ]
 
+const preferredReportingMappings = [
+  "editions -> SELECT * FROM world_cup.fn_list_editions()",
+  "teams of one edition -> SELECT * FROM world_cup.fn_list_edition_teams(<edition_id>)",
+  "teams across all editions -> SELECT * FROM world_cup.fn_list_all_edition_teams()",
+  "teams of latest edition -> SELECT * FROM world_cup.fn_list_edition_teams((SELECT edition_id FROM world_cup.fn_list_editions() ORDER BY edition_year DESC LIMIT 1))",
+  "groups of one edition -> SELECT * FROM world_cup.fn_list_edition_groups(<edition_id>)",
+  "group standings -> SELECT * FROM world_cup.fn_group_standings(<group_id>)",
+  "edition matches -> SELECT * FROM world_cup.fn_list_edition_matches(<edition_id>)",
+  "knockout path -> SELECT * FROM world_cup.fn_knockout_path(<edition_id>)",
+  "team squad in one edition -> SELECT * FROM world_cup.fn_list_team_squad(<edition_id>, <team_id>)",
+  "match events -> SELECT * FROM world_cup.fn_list_match_events(<match_id>)",
+  "top scorers -> SELECT * FROM world_cup.fn_top_scorers(<edition_id>) ORDER BY rank_position LIMIT <n>",
+  "team history -> SELECT * FROM world_cup.fn_team_history(<team_id>)",
+]
+
 export function buildSchemaCatalogPrompt() {
   return [
     "Approved schema namespace:",
@@ -66,6 +82,9 @@ export function buildSchemaCatalogPrompt() {
     "Reusable SQL surfaces:",
     ...curatedViews.map((view) => `- ${view}`),
     ...curatedFunctions.map((fnName) => `- ${fnName}`),
+    "",
+    "Preferred reporting mappings:",
+    ...preferredReportingMappings.map((mapping) => `- ${mapping}`),
     "",
     "Domain vocabulary:",
     `- ${domainVocabulary.join(", ")}`,

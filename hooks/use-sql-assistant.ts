@@ -1,42 +1,72 @@
 "use client"
 
+import { useChat } from "@ai-sdk/react"
+import { DefaultChatTransport } from "ai"
 import * as React from "react"
 
 import {
   buildSqlPlanningPrompt,
-  buildSqlResultSummaryPrompt,
   formatModelPrompt,
 } from "@/lib/sql-assistant/prompt-builder"
 import {
-  parseSqlDraftFromModelResponse,
-  stripCodeFences,
-} from "@/lib/sql-assistant/sql-normalizer"
-import {
   executeNaturalQuery,
-  generateNaturalQuery,
+  getNaturalQueryPlanningStreamUrl,
   getNaturalQueryStatus,
 } from "@/lib/services/sql-assistant/natural-query-service"
 import type {
+  NaturalQueryExecutionErrorReason,
+  NaturalQueryExecutionErrorScope,
   NaturalQueryProviderState,
   SqlAssistantContext,
-  SqlAssistantExecutionResultEntry,
   SqlAssistantFailure,
-  SqlAssistantMessageEntry,
-  SqlAssistantSqlProposalEntry,
-  SqlAssistantSystemStatusEntry,
-  SqlAssistantThreadEntry,
+  SqlAssistantUiMessage,
   SqlDraft,
   SqlExecutionCardState,
-  SqlExecutionResult,
   SqlExecutionState,
   SqlGenerationState,
-  SqlProposalState,
+  SqlPlanningHistory,
+  SqlPlanningStatusData,
+  SqlProposalRecord,
 } from "@/lib/sql-assistant/types"
 
 type ActiveOperationKind = "refresh" | "generate" | "execute" | null
 
+type PendingPlanningRequest = {
+  userPrompt: string
+  context: SqlAssistantContext
+}
+
 function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError"
+}
+
+function isFailureScope(value: unknown): value is SqlAssistantFailure["scope"] {
+  return (
+    value === "environment" ||
+    value === "generation" ||
+    value === "validation" ||
+    value === "execution" ||
+    value === "summary"
+  )
+}
+
+function isExecutionErrorScope(
+  value: unknown
+): value is NaturalQueryExecutionErrorScope {
+  return value === "validation" || value === "execution"
+}
+
+function isExecutionErrorReason(
+  value: unknown
+): value is NaturalQueryExecutionErrorReason {
+  return value === "database-validator" || value === "database-runtime"
+}
+
+function toExecutionErrorMetadata(failure: SqlAssistantFailure) {
+  return {
+    errorScope: isExecutionErrorScope(failure.scope) ? failure.scope : null,
+    errorReason: isExecutionErrorReason(failure.reason) ? failure.reason : null,
+  }
 }
 
 function toFailure(
@@ -49,11 +79,12 @@ function toFailure(
       message?: unknown
       detail?: unknown
       reason?: unknown
+      scope?: unknown
     }
 
     if (typeof maybeFailure.message === "string") {
       return {
-        scope,
+        scope: isFailureScope(maybeFailure.scope) ? maybeFailure.scope : scope,
         reason:
           typeof maybeFailure.reason === "string" ? maybeFailure.reason : undefined,
         message: maybeFailure.message,
@@ -74,22 +105,30 @@ function toFailure(
 function getStatusPresentation(options: {
   provider: NaturalQueryProviderState | null
   activeOperation: ActiveOperationKind
+  planningStatus: SqlPlanningStatusData | null
 }) {
-  const { provider, activeOperation } = options
+  const { provider, activeOperation, planningStatus } = options
 
   if (activeOperation === "refresh" && provider === null) {
     return {
       summary: "Checking local Ollama server",
       detail:
-        "The workspace is checking the configured Ollama server through the existing backend proxy.",
+        "The workspace is checking the configured Ollama server through the FastAPI backend.",
     }
   }
 
   if (activeOperation === "generate") {
+    if (planningStatus) {
+      return {
+        summary: planningStatus.summary,
+        detail: planningStatus.detail,
+      }
+    }
+
     return {
       summary: "Planning SQL with local Ollama",
       detail:
-        "The assistant is preparing one SQL proposal through the backend proxy and will keep it visible for approval.",
+        "The assistant is preparing one structured SQL proposal through the FastAPI backend.",
     }
   }
 
@@ -97,7 +136,7 @@ function getStatusPresentation(options: {
     return {
       summary: "Running approved query",
       detail:
-        "The assistant is executing validated SQL through the controlled backend path and then summarizing the observed result.",
+        "The assistant is executing one local-prechecked SQL query through the controlled backend path.",
     }
   }
 
@@ -115,121 +154,86 @@ function getStatusPresentation(options: {
   }
 }
 
-function createEntryId(prefix: string) {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return `${prefix}-${crypto.randomUUID()}`
+function extractProposalDraft(message: SqlAssistantUiMessage): SqlDraft | null {
+  for (let index = message.parts.length - 1; index >= 0; index -= 1) {
+    const part = message.parts[index]
+
+    if (part.type === "data-sqlProposal") {
+      return part.data.draft
+    }
   }
 
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  return null
 }
 
-function createTimestamp() {
-  return new Date().toISOString()
+function extractMessageText(message: SqlAssistantUiMessage) {
+  return message.parts
+    .filter((part) => part.type === "text")
+    .map((part) => part.text)
+    .join("")
+    .trim()
 }
 
-function createAssistantEntry(text: string): SqlAssistantMessageEntry {
+function buildPlanningHistory(options: {
+  messages: SqlAssistantUiMessage[]
+  proposalRecords: Record<string, SqlProposalRecord>
+}): SqlPlanningHistory {
+  const { messages, proposalRecords } = options
+
+  let lastUserPrompt: string | null = null
+  let lastAssistantMessage: string | null = null
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+
+    if (!lastAssistantMessage && message.role === "assistant") {
+      const assistantText = extractMessageText(message)
+
+      if (assistantText) {
+        lastAssistantMessage = assistantText
+      }
+    }
+
+    if (!lastUserPrompt && message.role === "user") {
+      const userText = message.parts
+        .filter((part) => part.type === "text")
+        .map((part) => part.text)
+        .join("")
+        .trim()
+
+      if (userText) {
+        lastUserPrompt = userText
+      }
+    }
+
+    if (lastUserPrompt && lastAssistantMessage) {
+      break
+    }
+  }
+
+  const latestProposal = messages
+    .map((message) => proposalRecords[message.id] ?? null)
+    .filter(
+      (record): record is SqlProposalRecord =>
+        Boolean(record) &&
+        record.proposalState !== "dismissed" &&
+        record.proposalState !== "canceled"
+    )
+    .at(-1)
+
   return {
-    id: createEntryId("assistant"),
-    kind: "assistant-message",
-    text,
-    createdAt: createTimestamp(),
-  }
-}
-
-function createSystemStatusEntry(options: {
-  tone: SqlAssistantSystemStatusEntry["tone"]
-  title: string
-  detail: string
-}): SqlAssistantSystemStatusEntry {
-  return {
-    id: createEntryId("status"),
-    kind: "system-status",
-    createdAt: createTimestamp(),
-    ...options,
-  }
-}
-
-function createFallbackSummary(result: SqlExecutionResult) {
-  if (result.rowCount === 0) {
-    return "The query executed successfully, but it returned no rows for the current request."
-  }
-
-  const base = `The query executed successfully and returned ${result.rowCount} row${result.rowCount === 1 ? "" : "s"}.`
-  const truncated = result.truncated
-    ? " The result set was truncated for controlled execution."
-    : ""
-  const notices =
-    result.notices.length > 0 ? ` ${result.notices.join(" ")}` : ""
-
-  return `${base}${truncated}${notices}`.trim()
-}
-
-function createProposalEntry(options: {
-  userPrompt: string
-  context: SqlAssistantContext
-  draft: SqlDraft
-}): SqlAssistantSqlProposalEntry {
-  const { userPrompt, context, draft } = options
-
-  return {
-    id: createEntryId("proposal"),
-    kind: "sql-proposal-card",
-    createdAt: createTimestamp(),
-    proposalState: draft.isExecutable ? "pending-approval" : "failed",
-    userPrompt,
-    context,
-    draft,
-  }
-}
-
-function createExecutionResultEntry(options: {
-  proposalId: string
-  sql: string
-}): SqlAssistantExecutionResultEntry {
-  return {
-    id: createEntryId("execution"),
-    kind: "execution-result-card",
-    createdAt: createTimestamp(),
-    proposalId: options.proposalId,
-    state: "executing",
-    sql: options.sql,
-    result: null,
-    errorMessage: null,
-  }
-}
-
-function updateProposalState(
-  entries: SqlAssistantThreadEntry[],
-  proposalId: string,
-  proposalState: SqlProposalState
-) {
-  return entries.map((entry) =>
-    entry.kind === "sql-proposal-card" && entry.id === proposalId
+    lastUserPrompt,
+    lastAssistantMessage,
+    lastSqlProposal: latestProposal?.draft.previewSql
       ? {
-          ...entry,
-          proposalState,
+          sql: latestProposal.draft.previewSql,
+          state:
+            latestProposal.proposalState === "blocked-precheck"
+              ? "blocked"
+              : "approved",
         }
-      : entry
-  )
-}
-
-function updateExecutionEntry(
-  entries: SqlAssistantThreadEntry[],
-  executionId: string,
-  nextState: SqlExecutionCardState,
-  result: SqlExecutionResult | null,
-  errorMessage: string | null
-) {
-  return entries.map((entry) =>
-    entry.kind === "execution-result-card" && entry.id === executionId
-      ? {
-          ...entry,
-          state: nextState,
-          result,
-          errorMessage,
-        }
-      : entry
-  )
+      : null,
+  }
 }
 
 export function useSqlAssistant() {
@@ -240,119 +244,175 @@ export function useSqlAssistant() {
     React.useState<SqlGenerationState>("idle")
   const [executionState, setExecutionState] =
     React.useState<SqlExecutionState>("idle")
-  const [thread, setThread] = React.useState<SqlAssistantThreadEntry[]>([])
   const [failure, setFailure] = React.useState<SqlAssistantFailure | null>(null)
-  const [activeOperation, setActiveOperation] =
-    React.useState<ActiveOperationKind>(null)
+  const [planningStatus, setPlanningStatus] =
+    React.useState<SqlPlanningStatusData | null>(null)
+  const [proposalRecords, setProposalRecords] = React.useState<
+    Record<string, SqlProposalRecord>
+  >({})
+  const [isRefreshing, setIsRefreshing] = React.useState(false)
 
-  const operationRef = React.useRef<{
-    token: number
-    kind: ActiveOperationKind
-    controller: AbortController | null
-  }>({
-    token: 0,
-    kind: null,
-    controller: null,
-  })
+  const executionControllerRef = React.useRef<AbortController | null>(null)
+  const pendingPlanningRequestRef = React.useRef<PendingPlanningRequest | null>(null)
+  const planningFailureRef = React.useRef(false)
 
-  const beginOperation = React.useCallback(
-    (kind: Exclude<ActiveOperationKind, null>) => {
-      operationRef.current.controller?.abort()
-
-      const token = operationRef.current.token + 1
-      const controller = new AbortController()
-
-      operationRef.current = {
-        token,
-        kind,
-        controller,
-      }
-      setActiveOperation(kind)
-
-      return {
-        token,
-        signal: controller.signal,
-      }
-    },
+  const planningTransport = React.useMemo(
+    () =>
+      new DefaultChatTransport<SqlAssistantUiMessage>({
+        api: getNaturalQueryPlanningStreamUrl(),
+      }),
     []
   )
 
-  const finishOperation = React.useCallback(
-    (token: number, kind: ActiveOperationKind) => {
-      if (
-        operationRef.current.token === token &&
-        operationRef.current.kind === kind
-      ) {
-        operationRef.current = {
-          token,
-          kind: null,
-          controller: null,
-        }
-        setActiveOperation(null)
-      }
-    },
-    []
-  )
-
-  const isOperationCurrent = React.useCallback(
-    (token: number, kind: ActiveOperationKind) =>
-      operationRef.current.token === token && operationRef.current.kind === kind,
-    []
-  )
-
-  const refreshEnvironment = React.useCallback(async () => {
-    const operation = beginOperation("refresh")
-
-    try {
-      const nextProvider = await getNaturalQueryStatus({
-        signal: operation.signal,
-      })
-
-      if (!isOperationCurrent(operation.token, "refresh")) {
+  const planningChat = useChat<SqlAssistantUiMessage>({
+    transport: planningTransport,
+    experimental_throttle: 48,
+    onData: (part) => {
+      if (part.type !== "data-sqlStatus") {
         return
       }
 
+      React.startTransition(() => {
+        setPlanningStatus(part.data)
+      })
+
+      if (part.data.state === "error") {
+        planningFailureRef.current = true
+        setFailure({
+          scope: "generation",
+          message: part.data.summary,
+          detail: part.data.detail,
+          recoverable: true,
+        })
+      }
+    },
+    onError: (error) => {
+      pendingPlanningRequestRef.current = null
+      planningFailureRef.current = true
+      setPlanningStatus(null)
+      setGenerationState("error")
+      setFailure(
+        toFailure(
+          "generation",
+          error,
+          "The configured Ollama model failed while planning SQL."
+        )
+      )
+    },
+    onFinish: ({ message, isAbort, isError }) => {
+      const pendingRequest = pendingPlanningRequestRef.current
+      pendingPlanningRequestRef.current = null
+      setPlanningStatus(null)
+
+      if (isAbort) {
+        planningFailureRef.current = false
+        setGenerationState("canceled")
+        setFailure(null)
+        return
+      }
+
+      const draft = extractProposalDraft(message)
+
+      if (!draft) {
+        if (isError || planningFailureRef.current) {
+          setGenerationState("error")
+        } else {
+          setGenerationState("success")
+        }
+
+        setFailure((currentFailure) =>
+          currentFailure ??
+          {
+            scope: "generation",
+            message:
+              "The assistant finished without returning a structured SQL proposal.",
+            recoverable: true,
+          }
+        )
+        return
+      }
+
+      planningFailureRef.current = false
+
+      React.startTransition(() => {
+        setProposalRecords((currentRecords) => ({
+          ...currentRecords,
+          [message.id]: {
+            messageId: message.id,
+            proposalState: draft.isExecutable
+              ? "pending-approval"
+              : "blocked-precheck",
+            userPrompt: pendingRequest?.userPrompt ?? "",
+            context:
+              pendingRequest?.context ??
+              ({
+                section: "overview",
+                editionId: null,
+                editionYear: null,
+              } satisfies SqlAssistantContext),
+            draft,
+            execution: null,
+          },
+        }))
+      })
+
+      if (draft.validationIssues.length > 0) {
+        setFailure({
+          scope: "validation",
+          message:
+            "The SQL proposal is visible, but it failed the local precheck for controlled execution.",
+          detail: draft.validationIssues.join(" "),
+          recoverable: true,
+        })
+      } else {
+        setFailure((currentFailure) =>
+          currentFailure?.scope === "validation" ? null : currentFailure
+        )
+      }
+
+      setGenerationState("success")
+    },
+  })
+
+  const planningBusy =
+    planningChat.status === "submitted" || planningChat.status === "streaming"
+  const executionBusy =
+    executionState === "validating" || executionState === "running"
+
+  const activeOperation: ActiveOperationKind = isRefreshing
+    ? "refresh"
+    : executionBusy
+      ? "execute"
+      : planningBusy
+        ? "generate"
+        : null
+
+  const refreshEnvironment = React.useCallback(async () => {
+    setIsRefreshing(true)
+
+    try {
+      const nextProvider = await getNaturalQueryStatus()
       setProvider(nextProvider)
       setFailure((currentFailure) =>
         currentFailure?.scope === "environment" ? null : currentFailure
       )
     } catch (error) {
-      if (isAbortError(error)) {
-        return
-      }
-
       setProvider(null)
       setFailure(
         toFailure(
           "environment",
           error,
-          "The workspace could not reach the configured Ollama provider through the backend proxy."
+          "The workspace could not reach the configured Ollama provider through the FastAPI backend."
         )
       )
     } finally {
-      finishOperation(operation.token, "refresh")
+      setIsRefreshing(false)
     }
-  }, [beginOperation, finishOperation, isOperationCurrent])
+  }, [])
 
   React.useEffect(() => {
     void refreshEnvironment()
   }, [refreshEnvironment])
-
-  const statusPresentation = getStatusPresentation({
-    provider,
-    activeOperation,
-  })
-
-  const appendThreadEntries = React.useCallback(
-    (...entries: SqlAssistantThreadEntry[]) => {
-      if (entries.length === 0) {
-        return
-      }
-
-      setThread((currentThread) => [...currentThread, ...entries])
-    },
-    []
-  )
 
   const sendPrompt = React.useCallback(
     async (prompt: string, context: SqlAssistantContext) => {
@@ -369,163 +429,112 @@ export function useSqlAssistant() {
         return null
       }
 
-      const userEntry: SqlAssistantThreadEntry = {
-        id: createEntryId("user"),
-        kind: "user-message",
-        text: normalizedPrompt,
-        createdAt: createTimestamp(),
-      }
-      appendThreadEntries(userEntry)
-
       if (provider?.status !== "ready") {
         const providerFailure = {
           scope: "environment" as const,
           message:
-            statusPresentation.detail ??
+            provider?.detail ??
             "The configured Ollama provider is not ready for SQL planning.",
           recoverable: true,
         }
 
         setGenerationState("error")
         setFailure(providerFailure)
-        appendThreadEntries(
-          createSystemStatusEntry({
-            tone: "destructive",
-            title: "Assistant unavailable",
-            detail: providerFailure.message,
-          })
-        )
         return null
       }
 
-      const operation = beginOperation("generate")
+      const promptPack = formatModelPrompt(
+        buildSqlPlanningPrompt({
+          prompt: normalizedPrompt,
+          context,
+          history: buildPlanningHistory({
+            messages: planningChat.messages,
+            proposalRecords,
+          }),
+          modelName: provider.model,
+        })
+      )
+
+      pendingPlanningRequestRef.current = {
+        userPrompt: normalizedPrompt,
+        context,
+      }
+      planningFailureRef.current = false
       setGenerationState("generating")
       setExecutionState("idle")
       setFailure(null)
+      setPlanningStatus({
+        phase: "planning",
+        summary: "Planning SQL with local Ollama",
+        detail:
+          "The assistant is streaming planning updates through the FastAPI backend.",
+        state: "running",
+      })
 
       try {
-        const promptPack = formatModelPrompt(
-          buildSqlPlanningPrompt({
-            prompt: normalizedPrompt,
-            context,
-            modelName: provider.model,
-          })
+        await planningChat.sendMessage(
+          { text: normalizedPrompt },
+          {
+            body: {
+              prompt: promptPack,
+            },
+          }
         )
-        const response = await generateNaturalQuery(promptPack, {
-          signal: operation.signal,
-        })
-
-        if (!isOperationCurrent(operation.token, "generate")) {
-          return null
-        }
-
-        const nextDraft = parseSqlDraftFromModelResponse(response.rawResponse)
-        const assistantText =
-          nextDraft.assistantMessage ??
-          nextDraft.clarification ??
-          (nextDraft.previewSql
-            ? "I prepared one SQL proposal for review."
-            : "I could not derive an executable SQL proposal from this request.")
-        const newEntries: SqlAssistantThreadEntry[] = [
-          createAssistantEntry(assistantText),
-        ]
-
-        if (nextDraft.previewSql) {
-          newEntries.push(
-            createProposalEntry({
-              userPrompt: normalizedPrompt,
-              context,
-              draft: nextDraft,
-            })
-          )
-        }
-
-        if (nextDraft.validationIssues.length > 0) {
-          setFailure({
-            scope: "validation",
-            message:
-              "The SQL proposal is visible, but it failed the local read-only validation checks.",
-            detail: nextDraft.validationIssues.join(" "),
-            recoverable: true,
-          })
-        }
-
-        appendThreadEntries(...newEntries)
-        setGenerationState("success")
-        return nextDraft
+        return true
       } catch (error) {
         if (isAbortError(error)) {
-          if (isOperationCurrent(operation.token, "generate")) {
-            setGenerationState("canceled")
-            setFailure(null)
-            appendThreadEntries(
-              createSystemStatusEntry({
-                tone: "warning",
-                title: "Planning canceled",
-                detail: "The assistant stopped before it could finish preparing a SQL proposal.",
-              })
-            )
-          }
-
+          pendingPlanningRequestRef.current = null
+          planningFailureRef.current = false
+          setGenerationState("canceled")
+          setPlanningStatus(null)
+          setFailure(null)
           return null
         }
 
-        const nextFailure = toFailure(
-          "generation",
-          error,
-          "The configured Ollama model failed while planning SQL."
-        )
+        pendingPlanningRequestRef.current = null
         setGenerationState("error")
-        setFailure(nextFailure)
-        appendThreadEntries(
-          createSystemStatusEntry({
-            tone: "destructive",
-            title: "Planning failed",
-            detail: nextFailure.detail
-              ? `${nextFailure.message} ${nextFailure.detail}`
-              : nextFailure.message,
-          })
+        setPlanningStatus(null)
+        setFailure(
+          toFailure(
+            "generation",
+            error,
+            "The configured Ollama model failed while planning SQL."
+          )
         )
         return null
-      } finally {
-        finishOperation(operation.token, "generate")
       }
     },
-    [
-      appendThreadEntries,
-      beginOperation,
-      finishOperation,
-      isOperationCurrent,
-      provider,
-      statusPresentation.detail,
-    ]
+    [planningChat, provider]
   )
 
-  const dismissProposal = React.useCallback(
-    (proposalId: string) => {
-      setThread((currentThread) =>
-        updateProposalState(currentThread, proposalId, "dismissed")
-      )
-      appendThreadEntries(
-        createAssistantEntry("The SQL proposal was dismissed. No query was executed.")
-      )
-    },
-    [appendThreadEntries]
-  )
+  const dismissProposal = React.useCallback((messageId: string) => {
+    setProposalRecords((currentRecords) => {
+      const proposal = currentRecords[messageId]
+
+      if (!proposal) {
+        return currentRecords
+      }
+
+      return {
+        ...currentRecords,
+        [messageId]: {
+          ...proposal,
+          proposalState: "dismissed",
+        },
+      }
+    })
+  }, [])
 
   const approveProposal = React.useCallback(
-    async (proposalId: string) => {
-      const proposal = thread.find(
-        (entry): entry is SqlAssistantSqlProposalEntry =>
-          entry.kind === "sql-proposal-card" && entry.id === proposalId
-      )
+    async (messageId: string) => {
+      const proposal = proposalRecords[messageId]
 
       if (!proposal || !proposal.draft.normalizedSql) {
         setExecutionState("error")
         setFailure({
           scope: "validation",
           message:
-            "Only validated read-only SQL proposals can be executed from the assistant drawer.",
+            "Only SQL proposals that passed the local precheck can be executed from the assistant drawer.",
           recoverable: true,
         })
         return null
@@ -535,207 +544,176 @@ export function useSqlAssistant() {
         return null
       }
 
-      const executionEntry = createExecutionResultEntry({
-        proposalId: proposal.id,
-        sql: proposal.draft.normalizedSql,
-      })
+      const controller = new AbortController()
+      executionControllerRef.current?.abort()
+      executionControllerRef.current = controller
 
-      setThread((currentThread) => [
-        ...updateProposalState(currentThread, proposal.id, "executing"),
-        executionEntry,
-      ])
-
-      const operation = beginOperation("execute")
       setExecutionState("validating")
       setFailure(null)
+      setProposalRecords((currentRecords) => ({
+        ...currentRecords,
+        [messageId]: {
+          ...proposal,
+          proposalState: "executing",
+          execution: {
+            state: "executing",
+            sql: proposal.draft.normalizedSql!,
+            result: null,
+            errorMessage: null,
+            errorScope: null,
+            errorReason: null,
+          },
+        },
+      }))
 
       try {
         await Promise.resolve()
 
-        if (!isOperationCurrent(operation.token, "execute")) {
+        if (controller.signal.aborted) {
           return null
         }
 
         setExecutionState("running")
-        const result = await executeNaturalQuery(
-          proposal.draft.normalizedSql,
-          {
-            signal: operation.signal,
-          }
-        )
+        const result = await executeNaturalQuery(proposal.draft.normalizedSql, {
+          signal: controller.signal,
+        })
 
-        if (!isOperationCurrent(operation.token, "execute")) {
+        if (controller.signal.aborted) {
           return null
         }
 
-        const executionStateForResult: SqlExecutionState =
-          result.rows.length > 0 ? "success" : "empty"
-        const executionCardState: SqlExecutionCardState =
+        const nextState: SqlExecutionCardState =
           result.rows.length > 0 ? "success" : "empty"
 
-        setExecutionState(executionStateForResult)
-        setThread((currentThread) =>
-          updateExecutionEntry(
-            updateProposalState(currentThread, proposal.id, "executed"),
-            executionEntry.id,
-            executionCardState,
-            result,
-            null
-          )
-        )
+        setExecutionState(result.rows.length > 0 ? "success" : "empty")
+        setProposalRecords((currentRecords) => {
+          const nextProposal = currentRecords[messageId] ?? proposal
 
-        let summaryText = createFallbackSummary(result)
-        let summaryWasCanceled = false
-
-        try {
-          const summaryPrompt = formatModelPrompt(
-            buildSqlResultSummaryPrompt({
-              prompt: proposal.userPrompt,
-              context: proposal.context,
-              modelName: provider?.model ?? "unknown-model",
-              sql: proposal.draft.normalizedSql,
-              result,
-            })
-          )
-          const summaryResponse = await generateNaturalQuery(summaryPrompt, {
-            signal: operation.signal,
-          })
-
-          if (!isOperationCurrent(operation.token, "execute")) {
-            return result
+          return {
+            ...currentRecords,
+            [messageId]: {
+              ...nextProposal,
+              proposalState: "executed",
+              execution: {
+                state: nextState,
+                sql: proposal.draft.normalizedSql!,
+                result,
+                errorMessage: null,
+                errorScope: null,
+                errorReason: null,
+              },
+            },
           }
-
-          const normalizedSummary = stripCodeFences(summaryResponse.rawResponse).trim()
-          if (normalizedSummary) {
-            summaryText = normalizedSummary
-          }
-        } catch (summaryError) {
-          if (!isAbortError(summaryError)) {
-            const summaryFailure = toFailure(
-              "summary",
-              summaryError,
-              "The assistant could not summarize the executed result."
-            )
-            setFailure(summaryFailure)
-            appendThreadEntries(
-              createSystemStatusEntry({
-                tone: "warning",
-                title: "Summary fallback",
-                detail: summaryFailure.message,
-              })
-            )
-          } else {
-            summaryWasCanceled = true
-          }
-        }
-
-        if (summaryWasCanceled) {
-          appendThreadEntries(
-            createSystemStatusEntry({
-              tone: "warning",
-              title: "Summary canceled",
-              detail:
-                "The query finished, but the assistant stopped before producing the result summary.",
-            })
-          )
-          return result
-        }
-
-        appendThreadEntries(createAssistantEntry(summaryText))
+        })
+        setFailure(null)
         return result
       } catch (error) {
-        if (isAbortError(error)) {
-          if (isOperationCurrent(operation.token, "execute")) {
-            setExecutionState("canceled")
-            setFailure(null)
-            setThread((currentThread) =>
-              updateExecutionEntry(
-                updateProposalState(currentThread, proposal.id, "canceled"),
-                executionEntry.id,
-                "canceled",
-                null,
-                "Execution was canceled before completion."
-              )
-            )
-            appendThreadEntries(
-              createSystemStatusEntry({
-                tone: "warning",
-                title: "Execution canceled",
-                detail:
-                  "The approved query was interrupted before the assistant could finish the result turn.",
-              })
-            )
-          }
+        if (isAbortError(error) || controller.signal.aborted) {
+          setExecutionState("canceled")
+          setFailure(null)
+          setProposalRecords((currentRecords) => {
+            const nextProposal = currentRecords[messageId] ?? proposal
 
+            return {
+              ...currentRecords,
+              [messageId]: {
+                ...nextProposal,
+                proposalState: "canceled",
+                execution: {
+                  state: "canceled",
+                  sql: proposal.draft.normalizedSql!,
+                  result: null,
+                  errorMessage: "Execution was canceled before completion.",
+                  errorScope: null,
+                  errorReason: null,
+                },
+              },
+            }
+          })
           return null
         }
 
         const nextFailure = toFailure(
           "execution",
           error,
-          "The backend rejected the generated SQL execution."
+          "The controlled PostgreSQL execution failed."
         )
+        const executionErrorMetadata = toExecutionErrorMetadata(nextFailure)
         setExecutionState("error")
         setFailure(nextFailure)
-        setThread((currentThread) =>
-          updateExecutionEntry(
-            updateProposalState(currentThread, proposal.id, "failed"),
-            executionEntry.id,
-            "error",
-            null,
-            nextFailure.detail
-              ? `${nextFailure.message} ${nextFailure.detail}`
-              : nextFailure.message
-          )
-        )
-        appendThreadEntries(
-          createAssistantEntry(
-            "The approved SQL could not be executed. Review the execution card for the backend error."
-          )
-        )
+        setProposalRecords((currentRecords) => {
+          const nextProposal = currentRecords[messageId] ?? proposal
+
+          return {
+            ...currentRecords,
+            [messageId]: {
+              ...nextProposal,
+              proposalState: "execution-failed",
+              execution: {
+                state: "error",
+                sql: proposal.draft.normalizedSql!,
+                result: null,
+                errorMessage: nextFailure.detail
+                  ? `${nextFailure.message} ${nextFailure.detail}`
+                  : nextFailure.message,
+                errorScope: executionErrorMetadata.errorScope,
+                errorReason: executionErrorMetadata.errorReason,
+              },
+            },
+          }
+        })
         return null
       } finally {
-        finishOperation(operation.token, "execute")
+        if (executionControllerRef.current === controller) {
+          executionControllerRef.current = null
+        }
       }
     },
-    [
-      appendThreadEntries,
-      beginOperation,
-      finishOperation,
-      isOperationCurrent,
-      provider?.model,
-      thread,
-    ]
+    [proposalRecords]
   )
 
   const clearThread = React.useCallback(() => {
-    operationRef.current.controller?.abort()
-    operationRef.current = {
-      token: operationRef.current.token,
-      kind: null,
-      controller: null,
-    }
-    setActiveOperation(null)
-    setThread([])
+    planningChat.stop()
+    executionControllerRef.current?.abort()
+    executionControllerRef.current = null
+    pendingPlanningRequestRef.current = null
+    planningFailureRef.current = false
+    planningChat.setMessages([])
+    setProposalRecords({})
+    setPlanningStatus(null)
     setFailure(null)
     setGenerationState("idle")
     setExecutionState("idle")
-  }, [])
+  }, [planningChat])
 
   const cancelOperation = React.useCallback(() => {
-    operationRef.current.controller?.abort()
-  }, [])
+    if (executionBusy) {
+      executionControllerRef.current?.abort()
+      return
+    }
+
+    if (planningBusy) {
+      planningChat.stop()
+    }
+  }, [executionBusy, planningBusy, planningChat])
+
+  const statusPresentation = getStatusPresentation({
+    provider,
+    activeOperation,
+    planningStatus,
+  })
 
   return {
     provider,
     providerStatus: provider?.status ?? "unavailable",
-    thread,
+    messages: planningChat.messages,
+    proposalRecords,
     failure,
     generationState,
     executionState,
     activeOperation,
-    isBusy: activeOperation !== null,
-    canGenerate: !activeOperation,
+    isBusy: planningBusy || executionBusy || isRefreshing,
+    canGenerate: !planningBusy && !executionBusy && !isRefreshing,
     statusSummary: statusPresentation.summary,
     statusDetail: statusPresentation.detail,
     refreshEnvironment,
