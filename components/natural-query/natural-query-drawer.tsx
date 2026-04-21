@@ -3,13 +3,13 @@
 import * as React from "react"
 import {
   AlertTriangle,
+  ArrowUp,
   Bot,
   CheckCircle2,
   Database,
   LoaderCircle,
   Play,
   RefreshCcw,
-  SendHorizonal,
   ShieldAlert,
   Square,
   Trash2,
@@ -35,7 +35,6 @@ import {
   PopoverRoot,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Table,
   TableBody,
@@ -55,26 +54,6 @@ import type {
 import { cn } from "@/lib/utils"
 
 type NaturalQueryDrawerProps = SqlAssistantContext
-
-const providerStatusToneMap = {
-  ready: "success",
-  unavailable: "destructive",
-} as const
-
-const providerStatusLabelMap = {
-  ready: "Ready",
-  unavailable: "Unavailable",
-} as const
-
-function buildSelectionChips(context: SqlAssistantContext) {
-  return [
-    `Section ${context.section}`,
-    `Edition ${context.editionYear ?? "all"}`,
-    context.teamId ? `Team #${context.teamId}` : null,
-    context.matchId ? `Match #${context.matchId}` : null,
-    context.groupId ? `Group #${context.groupId}` : null,
-  ].filter((value): value is string => Boolean(value))
-}
 
 function extractMessageText(message: SqlAssistantUiMessage) {
   return message.parts
@@ -178,7 +157,7 @@ function ExecutionResult({ execution }: { execution: SqlExecutionRecord }) {
   const executionErrorPresentation = getExecutionErrorPresentation(execution)
 
   return (
-    <Card className="border-primary/12 shadow-none">
+    <Card className="min-w-0 w-full max-w-full border-primary/12 shadow-none">
       <CardHeader className="border-b border-border/70">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
@@ -201,9 +180,9 @@ function ExecutionResult({ execution }: { execution: SqlExecutionRecord }) {
           ) : null}
         </div>
       </CardHeader>
-      <CardContent className="space-y-4 pt-4">
-        <div className="rounded-lg border border-primary/12 bg-primary/5 p-4">
-          <pre className="max-h-32 overflow-auto font-mono text-xs leading-6 whitespace-pre-wrap text-foreground">
+      <CardContent className="min-w-0 w-full max-w-full space-y-4 pt-4">
+        <div className="min-w-0 rounded-lg border border-primary/12 bg-primary/5 p-4">
+          <pre className="max-h-32 max-w-full overflow-auto font-mono text-xs leading-6 whitespace-pre-wrap break-words text-foreground">
             {execution.sql}
           </pre>
         </div>
@@ -255,8 +234,8 @@ function ExecutionResult({ execution }: { execution: SqlExecutionRecord }) {
         {execution.result &&
         execution.state !== "empty" &&
         execution.state !== "error" ? (
-          <div className="overflow-x-auto rounded-lg border border-border/70">
-            <Table>
+          <div className="min-w-0 w-full max-w-full overflow-x-auto rounded-lg border border-border/70">
+            <Table className="min-w-max">
               <TableHeader>
                 <TableRow>
                   {execution.result.columns.map((column) => (
@@ -303,7 +282,7 @@ function ProposalCard({
   const canDismiss = record.proposalState === "pending-approval" && !isBusy
 
   return (
-    <Card className="border-primary/20 bg-primary/5 shadow-none">
+    <Card className="min-w-0 w-full max-w-full border-primary/20 bg-primary/5 shadow-none">
       <CardHeader className="border-b border-primary/10">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
@@ -327,9 +306,9 @@ function ProposalCard({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4 pt-4">
-        <div className="rounded-lg border border-primary/12 bg-background p-4">
-          <pre className="max-h-64 overflow-auto font-mono text-xs leading-6 whitespace-pre-wrap text-foreground">
+      <CardContent className="min-w-0 w-full max-w-full space-y-4 pt-4">
+        <div className="min-w-0 rounded-lg border border-primary/12 bg-background p-4">
+          <pre className="max-h-64 max-w-full overflow-auto font-mono text-xs leading-6 whitespace-pre-wrap break-words text-foreground">
             {record.draft.previewSql ?? "No SQL preview available."}
           </pre>
         </div>
@@ -440,7 +419,7 @@ function ConversationEntry({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 w-full max-w-full space-y-4">
       {text ? (
         <div className="flex justify-start">
           <div className="max-w-[88%] rounded-2xl rounded-bl-md border border-border/70 bg-card px-4 py-3 text-sm text-foreground">
@@ -483,18 +462,6 @@ export function NaturalQueryDrawer(props: NaturalQueryDrawerProps) {
       props.teamId,
     ]
   )
-  const selectionChips = React.useMemo(
-    () => buildSelectionChips(context),
-    [context]
-  )
-  const isCheckingProvider =
-    assistant.activeOperation === "refresh" && assistant.provider === null
-  const providerTone = isCheckingProvider
-    ? "neutral"
-    : providerStatusToneMap[assistant.providerStatus]
-  const providerLabel = isCheckingProvider
-    ? "Checking"
-    : providerStatusLabelMap[assistant.providerStatus]
   const hasConversation = assistant.messages.length > 0
 
   React.useEffect(() => {
@@ -548,46 +515,10 @@ export function NaturalQueryDrawer(props: NaturalQueryDrawerProps) {
 
       <PopoverContent
         aria-label="Query assistant"
-        className="bg-background p-0"
+        className="bg-background p-0 sm:max-w-[44rem] lg:max-w-[54rem] xl:max-w-[62rem]"
       >
-        <div className="border-b border-primary/12 bg-muted/20 px-4 py-4">
-          <div className="space-y-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 font-heading text-base font-medium text-foreground">
-                  <Bot className="size-4" />
-                  <span>Natural Query</span>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Review SQL before execution and keep the local provider status visible.
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setOpen(false)}
-                >
-                  <X />
-                  <span className="sr-only">Close assistant panel</span>
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <SemanticBadge tone={providerTone}>{providerLabel}</SemanticBadge>
-              {assistant.provider ? (
-                <SemanticBadge tone="neutral">
-                  {assistant.provider.model}
-                </SemanticBadge>
-              ) : null}
-              {selectionChips.map((chip) => (
-                <SemanticBadge key={chip} tone="neutral">
-                  {chip}
-                </SemanticBadge>
-              ))}
-            </div>
-
+        <div className="border-b border-primary/12 bg-muted/20 px-4 py-2.5">
+          <div className="relative flex min-h-9 items-center gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
@@ -618,12 +549,30 @@ export function NaturalQueryDrawer(props: NaturalQueryDrawerProps) {
                 New session
               </Button>
             </div>
+
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="flex items-center gap-2 font-heading text-base font-medium text-foreground">
+                <Bot className="size-4" />
+                <span>Natural Query</span>
+              </div>
+            </div>
+
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setOpen(false)}
+              >
+                <X />
+                <span className="sr-only">Close assistant panel</span>
+              </Button>
+            </div>
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col">
-          <ScrollArea className="min-h-0 flex-1 px-4 py-4">
-            <div className="space-y-4 pb-4">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4">
+            <div className="min-w-0 w-full max-w-full space-y-4 pb-44">
               {assistant.failure ? (
                 <Alert variant="destructive">
                   <ShieldAlert />
@@ -678,42 +627,32 @@ export function NaturalQueryDrawer(props: NaturalQueryDrawerProps) {
 
               <div ref={endRef} />
             </div>
-          </ScrollArea>
-        </div>
+          </div>
 
-        <div className="border-t border-border/80 bg-background px-4 py-4">
-          <div className="space-y-3">
-            <Textarea
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              onKeyDown={handlePromptKeyDown}
-              placeholder="Example: How many teams are in the knockout stage for the selected edition?"
-              className="min-h-28 resize-none bg-background"
-              disabled={assistant.isBusy}
-            />
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs text-muted-foreground">
-                Press Enter to send. Use Shift+Enter for a new line.
-              </p>
+          <div className="pointer-events-none absolute inset-x-4 bottom-4 z-10">
+            <div className="pointer-events-auto relative">
+              <Textarea
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                onKeyDown={handlePromptKeyDown}
+                placeholder="Example: How many teams are in the knockout stage for the selected edition?"
+                className="min-h-32 resize-none rounded-[1.8rem] border-border/70 bg-background/68 px-5 py-5 pr-18 text-sm shadow-[0_18px_48px_rgba(15,23,42,0.18)] backdrop-blur-xl transition-colors focus-visible:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary/20"
+                disabled={assistant.isBusy}
+              />
               <Button
                 onClick={() => void handleSubmit()}
                 disabled={assistant.isBusy || prompt.trim().length === 0}
-                className={cn(
-                  assistant.generationState === "generating" ||
-                    assistant.executionState === "running" ||
-                    assistant.executionState === "validating"
-                    ? "min-w-32"
-                    : undefined
-                )}
+                size="icon"
+                className="absolute right-4 bottom-4 size-11 rounded-full shadow-none"
               >
                 {assistant.generationState === "generating" ||
                 assistant.executionState === "running" ||
                 assistant.executionState === "validating" ? (
                   <LoaderCircle className="animate-spin" />
                 ) : (
-                  <SendHorizonal />
+                  <ArrowUp />
                 )}
-                Send
+                <span className="sr-only">Send prompt</span>
               </Button>
             </div>
           </div>
