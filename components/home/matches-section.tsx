@@ -35,10 +35,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { useMatchesSectionData } from "@/hooks/home/sections/use-matches-section-data"
+import type { DashboardNavigationState } from "@/hooks/home/use-dashboard-navigation"
 import { formatKickoffDate, formatMatchLabel, formatPenaltyLabel } from "@/lib/world-cup/format"
-import type { useWorldCupDashboard } from "@/hooks/use-world-cup-dashboard"
-
-type DashboardState = ReturnType<typeof useWorldCupDashboard>
 
 function MatchesTableSkeletonCard() {
   return (
@@ -54,7 +53,14 @@ function MatchesTableSkeletonCard() {
   )
 }
 
-export function MatchesSection({ dashboard }: { dashboard: DashboardState }) {
+export function MatchesSection({
+  navigation,
+}: {
+  navigation: DashboardNavigationState
+}) {
+  const dashboard = useMatchesSectionData({
+    selectedEditionId: navigation.selectedEditionId,
+  })
   const [searchValue, setSearchValue] = React.useState("")
   const [phaseFilter, setPhaseFilter] = React.useState("all")
   const [groupFilter, setGroupFilter] = React.useState("all")
@@ -227,12 +233,12 @@ export function MatchesSection({ dashboard }: { dashboard: DashboardState }) {
                     <TableRow
                       key={match.match_id}
                       data-state={
-                        match.match_id === dashboard.selectedMatchId
+                        match.match_id === navigation.selectedMatchId
                           ? "selected"
                           : undefined
                       }
                       className="cursor-pointer"
-                      onClick={() => dashboard.focusMatch(match.match_id)}
+                      onClick={() => navigation.focusMatch(match.match_id)}
                     >
                       <TableCell>
                         <div className="space-y-1">

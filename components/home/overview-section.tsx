@@ -22,10 +22,9 @@ import {
 } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useOverviewSectionData } from "@/hooks/home/sections/use-overview-section-data"
+import type { DashboardNavigationState } from "@/hooks/home/use-dashboard-navigation"
 import { formatKickoffDate, formatMatchLabel, formatNumber } from "@/lib/world-cup/format"
-import type { useWorldCupDashboard } from "@/hooks/use-world-cup-dashboard"
-
-type DashboardState = ReturnType<typeof useWorldCupDashboard>
 
 function MetricCard({
   label,
@@ -99,10 +98,17 @@ function OverviewSkeleton() {
   )
 }
 
-export function OverviewSection({ dashboard }: { dashboard: DashboardState }) {
+export function OverviewSection({
+  navigation,
+}: {
+  navigation: DashboardNavigationState
+}) {
+  const dashboard = useOverviewSectionData({
+    selectedEditionId: navigation.selectedEditionId,
+  })
   const isOverviewLoading =
     dashboard.editions.isLoading ||
-    (dashboard.selectedEditionId !== null &&
+    (navigation.selectedEditionId !== null &&
       (dashboard.teams.isLoading ||
         dashboard.groups.isLoading ||
         dashboard.matches.isLoading ||
@@ -116,8 +122,7 @@ export function OverviewSection({ dashboard }: { dashboard: DashboardState }) {
     dashboard.knockout.isRefreshing ||
     dashboard.topScorers.isRefreshing
   const finalMatch =
-    dashboard.matches.data.find((match) => match.phase_name === "Final") ??
-    dashboard.selectedMatch
+    dashboard.matches.data.find((match) => match.phase_name === "Final") ?? null
 
   const podium = [
     {
@@ -288,7 +293,7 @@ export function OverviewSection({ dashboard }: { dashboard: DashboardState }) {
                       </div>
                     </div>
                   </div>
-                  <Button onClick={() => dashboard.focusMatch(finalMatch.match_id)}>
+                  <Button onClick={() => navigation.focusMatch(finalMatch.match_id)}>
                     Inspect match
                   </Button>
                 </>
@@ -327,7 +332,7 @@ export function OverviewSection({ dashboard }: { dashboard: DashboardState }) {
                   <Button
                     variant="outline"
                     onClick={() =>
-                      dashboard.focusTeam(
+                      navigation.focusTeam(
                         dashboard.overviewMetrics.leadingScorer!.team_id,
                         "history"
                       )
@@ -366,7 +371,7 @@ export function OverviewSection({ dashboard }: { dashboard: DashboardState }) {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => dashboard.focusGroup(group.group_id)}
+                      onClick={() => navigation.focusGroup(group.group_id)}
                     >
                       Open route
                     </Button>
@@ -377,7 +382,7 @@ export function OverviewSection({ dashboard }: { dashboard: DashboardState }) {
                         <button
                           key={`${group.group_id}-${team.team_id}`}
                           type="button"
-                          onClick={() => dashboard.focusTeam(team.team_id!, "teams")}
+                          onClick={() => navigation.focusTeam(team.team_id!, "teams")}
                           className="flex w-full items-center justify-between rounded-md border border-transparent px-2 py-2 text-left transition-colors hover:border-border hover:bg-background"
                         >
                           <span className="font-medium text-foreground">
@@ -407,7 +412,7 @@ export function OverviewSection({ dashboard }: { dashboard: DashboardState }) {
                 <React.Fragment key={match.match_id}>
                   <button
                     type="button"
-                    onClick={() => dashboard.focusMatch(match.match_id)}
+                    onClick={() => navigation.focusMatch(match.match_id)}
                     className="flex w-full items-center justify-between gap-4 rounded-md px-1 py-2 text-left transition-colors hover:bg-muted/30"
                   >
                     <div className="space-y-1">

@@ -20,9 +20,8 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import type { useWorldCupDashboard } from "@/hooks/use-world-cup-dashboard"
-
-type DashboardState = ReturnType<typeof useWorldCupDashboard>
+import { useGroupsSectionData } from "@/hooks/home/sections/use-groups-section-data"
+import type { DashboardNavigationState } from "@/hooks/home/use-dashboard-navigation"
 
 function GroupsGridSkeleton() {
   return (
@@ -47,7 +46,14 @@ function GroupsGridSkeleton() {
   )
 }
 
-export function GroupsSection({ dashboard }: { dashboard: DashboardState }) {
+export function GroupsSection({
+  navigation,
+}: {
+  navigation: DashboardNavigationState
+}) {
+  const dashboard = useGroupsSectionData({
+    selectedEditionId: navigation.selectedEditionId,
+  })
   const [searchValue, setSearchValue] = React.useState("")
   const deferredSearchValue = React.useDeferredValue(searchValue)
 
@@ -124,7 +130,7 @@ export function GroupsSection({ dashboard }: { dashboard: DashboardState }) {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => dashboard.focusGroup(group.group_id)}
+                      onClick={() => navigation.focusGroup(group.group_id)}
                     >
                       Open
                     </Button>
@@ -136,7 +142,9 @@ export function GroupsSection({ dashboard }: { dashboard: DashboardState }) {
                       <button
                         key={`${group.group_id}-${team.team_id}`}
                         type="button"
-                        onClick={() => dashboard.focusTeam(team.team_id!, "history")}
+                        onClick={() =>
+                          navigation.focusTeam(team.team_id!, "history")
+                        }
                         className="w-full rounded-lg border border-border/70 bg-muted/20 px-3 py-3 text-left transition-colors hover:bg-background"
                       >
                         <div className="flex items-center justify-between gap-3">

@@ -40,10 +40,9 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useDatabaseSectionData } from "@/hooks/home/sections/use-database-section-data"
 import { formatNumber } from "@/lib/world-cup/format"
-import type { useWorldCupDashboard } from "@/hooks/use-world-cup-dashboard"
 
-type DashboardState = ReturnType<typeof useWorldCupDashboard>
 type DatabaseAction = "initialize" | "reporting" | "populate" | "cleanup"
 
 function formatSyntheticTimestamp(value: string | null) {
@@ -156,7 +155,8 @@ function DatabaseWorkspaceSkeleton() {
   )
 }
 
-export function DatabaseSection({ dashboard }: { dashboard: DashboardState }) {
+export function DatabaseSection() {
+  const dashboard = useDatabaseSectionData()
   const [isRemoveDialogOpen, setIsRemoveDialogOpen] = React.useState(false)
   const status = dashboard.databaseStatus.data
   const isStatusLoading =

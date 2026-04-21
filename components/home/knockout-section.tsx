@@ -20,10 +20,9 @@ import {
 } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useKnockoutSectionData } from "@/hooks/home/sections/use-knockout-section-data"
+import type { DashboardNavigationState } from "@/hooks/home/use-dashboard-navigation"
 import { formatKickoffDate, formatMatchLabel } from "@/lib/world-cup/format"
-import type { useWorldCupDashboard } from "@/hooks/use-world-cup-dashboard"
-
-type DashboardState = ReturnType<typeof useWorldCupDashboard>
 
 function KnockoutSkeleton() {
   return (
@@ -50,7 +49,15 @@ function KnockoutSkeleton() {
   )
 }
 
-export function KnockoutSection({ dashboard }: { dashboard: DashboardState }) {
+export function KnockoutSection({
+  navigation,
+}: {
+  navigation: DashboardNavigationState
+}) {
+  const dashboard = useKnockoutSectionData({
+    selectedEditionId: navigation.selectedEditionId,
+  })
+
   return (
     <div className="space-y-6">
       <SectionHeading
@@ -101,13 +108,15 @@ export function KnockoutSection({ dashboard }: { dashboard: DashboardState }) {
                   <CardContent className="space-y-3 pt-4">
                     {phase.matches.map((match) => {
                       const isSelected =
-                        dashboard.selectedMatchId === match.match_id
+                        navigation.selectedMatchId === match.match_id
 
                       return (
                         <button
                           key={match.match_id}
                           type="button"
-                          onClick={() => dashboard.focusMatch(match.match_id, "knockout")}
+                          onClick={() =>
+                            navigation.focusMatch(match.match_id, "knockout")
+                          }
                           className={[
                             "w-full rounded-lg border px-4 py-4 text-left transition-colors",
                             isSelected

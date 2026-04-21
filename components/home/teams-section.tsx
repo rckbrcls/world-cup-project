@@ -35,10 +35,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { useTeamsSectionData } from "@/hooks/home/sections/use-teams-section-data"
+import type { DashboardNavigationState } from "@/hooks/home/use-dashboard-navigation"
 import { formatNumber } from "@/lib/world-cup/format"
-import type { useWorldCupDashboard } from "@/hooks/use-world-cup-dashboard"
-
-type DashboardState = ReturnType<typeof useWorldCupDashboard>
 
 function TeamsTableSkeletonCard() {
   return (
@@ -54,7 +53,14 @@ function TeamsTableSkeletonCard() {
   )
 }
 
-export function TeamsSection({ dashboard }: { dashboard: DashboardState }) {
+export function TeamsSection({
+  navigation,
+}: {
+  navigation: DashboardNavigationState
+}) {
+  const dashboard = useTeamsSectionData({
+    selectedEditionId: navigation.selectedEditionId,
+  })
   const [searchValue, setSearchValue] = React.useState("")
   const [groupFilter, setGroupFilter] = React.useState("all")
   const [sortBy, setSortBy] = React.useState("rank")
@@ -206,7 +212,7 @@ export function TeamsSection({ dashboard }: { dashboard: DashboardState }) {
                 </TableHeader>
                 <TableBody>
                   {filteredTeams.map((team) => {
-                    const isSelected = team.team_id === dashboard.selectedTeamId
+                    const isSelected = team.team_id === navigation.selectedTeamId
                     const rankTone =
                       team.final_rank === 1
                         ? "champion"
@@ -219,7 +225,7 @@ export function TeamsSection({ dashboard }: { dashboard: DashboardState }) {
                         key={team.team_id}
                         data-state={isSelected ? "selected" : undefined}
                         className="cursor-pointer"
-                        onClick={() => dashboard.focusTeam(team.team_id, "teams")}
+                        onClick={() => navigation.focusTeam(team.team_id, "teams")}
                       >
                         <TableCell className="font-medium text-foreground">
                           {team.team_name}

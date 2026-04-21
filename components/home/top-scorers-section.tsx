@@ -30,10 +30,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { useTopScorersSectionData } from "@/hooks/home/sections/use-top-scorers-section-data"
+import type { DashboardNavigationState } from "@/hooks/home/use-dashboard-navigation"
 import { formatNumber } from "@/lib/world-cup/format"
-import type { useWorldCupDashboard } from "@/hooks/use-world-cup-dashboard"
-
-type DashboardState = ReturnType<typeof useWorldCupDashboard>
 
 function TopScorersSkeleton() {
   return (
@@ -61,7 +60,14 @@ function TopScorersSkeleton() {
   )
 }
 
-export function TopScorersSection({ dashboard }: { dashboard: DashboardState }) {
+export function TopScorersSection({
+  navigation,
+}: {
+  navigation: DashboardNavigationState
+}) {
+  const dashboard = useTopScorersSectionData({
+    selectedEditionId: navigation.selectedEditionId,
+  })
   const [searchValue, setSearchValue] = React.useState("")
   const deferredSearchValue = React.useDeferredValue(searchValue)
 
@@ -148,7 +154,7 @@ export function TopScorersSection({ dashboard }: { dashboard: DashboardState }) 
                     </div>
                     <Button
                       variant="outline"
-                      onClick={() => dashboard.focusTeam(leader.team_id, "history")}
+                      onClick={() => navigation.focusTeam(leader.team_id, "history")}
                     >
                       Open team history
                     </Button>
@@ -188,7 +194,7 @@ export function TopScorersSection({ dashboard }: { dashboard: DashboardState }) 
                       <TableRow
                         key={row.player_id}
                         className="cursor-pointer"
-                        onClick={() => dashboard.focusTeam(row.team_id, "history")}
+                        onClick={() => navigation.focusTeam(row.team_id, "history")}
                       >
                         <TableCell>
                           <SemanticBadge
@@ -208,7 +214,9 @@ export function TopScorersSection({ dashboard }: { dashboard: DashboardState }) 
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => dashboard.focusTeam(row.team_id, "history")}
+                            onClick={() =>
+                              navigation.focusTeam(row.team_id, "history")
+                            }
                           >
                             History
                           </Button>

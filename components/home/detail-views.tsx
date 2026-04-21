@@ -36,7 +36,10 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import type { useWorldCupDashboard } from "@/hooks/use-world-cup-dashboard"
+import { useGroupDetailData } from "@/hooks/home/sections/use-group-detail-data"
+import { useMatchDetailData } from "@/hooks/home/sections/use-match-detail-data"
+import { useTeamDetailData } from "@/hooks/home/sections/use-team-detail-data"
+import type { DashboardNavigationState } from "@/hooks/home/use-dashboard-navigation"
 import { summarizeTeamHistory } from "@/lib/world-cup/selectors"
 import {
   formatEventTypeLabel,
@@ -44,8 +47,6 @@ import {
   formatMatchLabel,
 } from "@/lib/world-cup/format"
 import type { MatchEventType } from "@/lib/world-cup/types"
-
-type DashboardState = ReturnType<typeof useWorldCupDashboard>
 
 const eventToneMap: Record<
   MatchEventType,
@@ -153,12 +154,16 @@ function GroupDetailSkeleton() {
 }
 
 export function TeamDetailView({
-  dashboard,
+  navigation,
   initialTab = "squad",
 }: {
-  dashboard: DashboardState
+  navigation: DashboardNavigationState
   initialTab?: "squad" | "history"
 }) {
+  const dashboard = useTeamDetailData({
+    selectedEditionId: navigation.selectedEditionId,
+    selectedTeamId: navigation.selectedTeamId,
+  })
   const historySummary = React.useMemo(
     () => summarizeTeamHistory(dashboard.teamHistory.data),
     [dashboard.teamHistory.data]
@@ -419,7 +424,16 @@ export function TeamDetailView({
   )
 }
 
-export function MatchDetailView({ dashboard }: { dashboard: DashboardState }) {
+export function MatchDetailView({
+  navigation,
+}: {
+  navigation: DashboardNavigationState
+}) {
+  const dashboard = useMatchDetailData({
+    selectedEditionId: navigation.selectedEditionId,
+    selectedMatchId: navigation.selectedMatchId,
+  })
+
   if (dashboard.matches.isLoading && !dashboard.matches.data.length) {
     return <MatchDetailSkeleton />
   }
@@ -586,7 +600,16 @@ export function MatchDetailView({ dashboard }: { dashboard: DashboardState }) {
   )
 }
 
-export function GroupDetailView({ dashboard }: { dashboard: DashboardState }) {
+export function GroupDetailView({
+  navigation,
+}: {
+  navigation: DashboardNavigationState
+}) {
+  const dashboard = useGroupDetailData({
+    selectedEditionId: navigation.selectedEditionId,
+    selectedGroupId: navigation.selectedGroupId,
+  })
+
   if (dashboard.groups.isLoading && !dashboard.groupedGroups.length) {
     return <GroupDetailSkeleton />
   }
@@ -633,7 +656,7 @@ export function GroupDetailView({ dashboard }: { dashboard: DashboardState }) {
                 <button
                   key={`${dashboard.selectedGroup!.group_id}-${team.team_id}`}
                   type="button"
-                  onClick={() => dashboard.focusTeam(team.team_id!, "history")}
+                  onClick={() => navigation.focusTeam(team.team_id!, "history")}
                   className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/20 px-3 py-3 text-left transition-colors hover:bg-background"
                 >
                   <div className="min-w-0">
@@ -712,7 +735,7 @@ export function GroupDetailView({ dashboard }: { dashboard: DashboardState }) {
                       <TableRow
                         key={row.team_id}
                         className="cursor-pointer"
-                        onClick={() => dashboard.focusTeam(row.team_id, "history")}
+                        onClick={() => navigation.focusTeam(row.team_id, "history")}
                       >
                         <TableCell>
                           <SemanticBadge

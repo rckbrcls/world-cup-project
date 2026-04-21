@@ -29,9 +29,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { summarizeTeamHistory } from "@/lib/world-cup/selectors"
-import type { useWorldCupDashboard } from "@/hooks/use-world-cup-dashboard"
-
-type DashboardState = ReturnType<typeof useWorldCupDashboard>
+import { useHistorySectionData } from "@/hooks/home/sections/use-history-section-data"
+import type { DashboardNavigationState } from "@/hooks/home/use-dashboard-navigation"
 
 function HistorySkeleton() {
   return (
@@ -50,7 +49,15 @@ function HistorySkeleton() {
   )
 }
 
-export function HistorySection({ dashboard }: { dashboard: DashboardState }) {
+export function HistorySection({
+  navigation,
+}: {
+  navigation: DashboardNavigationState
+}) {
+  const dashboard = useHistorySectionData({
+    selectedEditionId: navigation.selectedEditionId,
+    selectedTeamId: navigation.selectedTeamId,
+  })
   const historySummary = React.useMemo(
     () => summarizeTeamHistory(dashboard.teamHistory.data),
     [dashboard.teamHistory.data]
@@ -70,7 +77,7 @@ export function HistorySection({ dashboard }: { dashboard: DashboardState }) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => dashboard.focusSection("teams")}
+            onClick={() => navigation.focusSection("teams")}
           >
             Open teams route
           </Button>

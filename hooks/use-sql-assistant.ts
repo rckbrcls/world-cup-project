@@ -11,6 +11,11 @@ import {
   parseSqlDraftFromModelResponse,
   stripCodeFences,
 } from "@/lib/sql-assistant/sql-normalizer"
+import {
+  executeNaturalQuery,
+  generateNaturalQuery,
+  getNaturalQueryStatus,
+} from "@/lib/services/sql-assistant/natural-query-service"
 import type {
   NaturalQueryProviderState,
   SqlAssistantContext,
@@ -27,7 +32,6 @@ import type {
   SqlGenerationState,
   SqlProposalState,
 } from "@/lib/sql-assistant/types"
-import { worldCupApi } from "@/lib/world-cup/api"
 
 type ActiveOperationKind = "refresh" | "generate" | "execute" | null
 
@@ -300,7 +304,7 @@ export function useSqlAssistant() {
     const operation = beginOperation("refresh")
 
     try {
-      const nextProvider = await worldCupApi.getNaturalQueryStatus({
+      const nextProvider = await getNaturalQueryStatus({
         signal: operation.signal,
       })
 
@@ -407,7 +411,7 @@ export function useSqlAssistant() {
             modelName: provider.model,
           })
         )
-        const response = await worldCupApi.generateNaturalQuery(promptPack, {
+        const response = await generateNaturalQuery(promptPack, {
           signal: operation.signal,
         })
 
@@ -553,9 +557,12 @@ export function useSqlAssistant() {
         }
 
         setExecutionState("running")
-        const result = await worldCupApi.executeNaturalQuery(proposal.draft.normalizedSql, {
-          signal: operation.signal,
-        })
+        const result = await executeNaturalQuery(
+          proposal.draft.normalizedSql,
+          {
+            signal: operation.signal,
+          }
+        )
 
         if (!isOperationCurrent(operation.token, "execute")) {
           return null
@@ -590,7 +597,7 @@ export function useSqlAssistant() {
               result,
             })
           )
-          const summaryResponse = await worldCupApi.generateNaturalQuery(summaryPrompt, {
+          const summaryResponse = await generateNaturalQuery(summaryPrompt, {
             signal: operation.signal,
           })
 

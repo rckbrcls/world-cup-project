@@ -12,6 +12,7 @@ import {
   TeamDetailView,
 } from "@/components/home/detail-views"
 import { homeSectionMap, homeSections } from "@/components/home/home-config"
+import { BadgeSkeleton } from "@/components/home/panel-states"
 import { GroupsSection } from "@/components/home/groups-section"
 import { HistorySection } from "@/components/home/history-section"
 import { KnockoutSection } from "@/components/home/knockout-section"
@@ -21,7 +22,6 @@ import { OverviewSection } from "@/components/home/overview-section"
 import { TeamsSection } from "@/components/home/teams-section"
 import { ThemeToggle } from "@/components/home/theme-toggle"
 import { TopScorersSection } from "@/components/home/top-scorers-section"
-import { BadgeSkeleton } from "@/components/home/panel-states"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -34,7 +34,6 @@ import { Button } from "@/components/ui/button"
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -48,46 +47,73 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useWorldCupDashboard } from "@/hooks/use-world-cup-dashboard"
+import { useGroupsSectionData } from "@/hooks/home/sections/use-groups-section-data"
+import { useHistorySectionData } from "@/hooks/home/sections/use-history-section-data"
+import { useKnockoutSectionData } from "@/hooks/home/sections/use-knockout-section-data"
+import { useMatchesSectionData } from "@/hooks/home/sections/use-matches-section-data"
+import { useTeamsSectionData } from "@/hooks/home/sections/use-teams-section-data"
+import { useTopScorersSectionData } from "@/hooks/home/sections/use-top-scorers-section-data"
+import { useEditionWorkspaceData } from "@/hooks/home/sections/shared"
+import { useDashboardNavigation } from "@/hooks/home/use-dashboard-navigation"
 import { buildDashboardHref } from "@/lib/home-routing"
 import { formatMatchLabel } from "@/lib/world-cup/format"
 
 function getSectionBadgeState(
-  dashboard: ReturnType<typeof useWorldCupDashboard>,
+  options: {
+    teamsData: ReturnType<typeof useTeamsSectionData>
+    groupsData: ReturnType<typeof useGroupsSectionData>
+    matchesData: ReturnType<typeof useMatchesSectionData>
+    knockoutData: ReturnType<typeof useKnockoutSectionData>
+    topScorersData: ReturnType<typeof useTopScorersSectionData>
+    historyData: ReturnType<typeof useHistorySectionData>
+  },
   section: keyof typeof homeSectionMap
 ) {
+  const {
+    teamsData,
+    groupsData,
+    matchesData,
+    knockoutData,
+    topScorersData,
+    historyData,
+  } = options
+
   switch (section) {
     case "teams":
       return {
-        count: dashboard.teams.data.length,
-        isLoading: dashboard.teams.isLoading || dashboard.teams.isRefreshing,
+        count: teamsData.teams.data.length,
+        isLoading: teamsData.teams.isLoading || teamsData.teams.isRefreshing,
       }
     case "groups":
       return {
-        count: dashboard.groupedGroups.length,
-        isLoading: dashboard.groups.isLoading || dashboard.groups.isRefreshing,
+        count: groupsData.groupedGroups.length,
+        isLoading: groupsData.groups.isLoading || groupsData.groups.isRefreshing,
       }
     case "matches":
       return {
-        count: dashboard.matches.data.length,
-        isLoading: dashboard.matches.isLoading || dashboard.matches.isRefreshing,
+        count: matchesData.matches.data.length,
+        isLoading:
+          matchesData.matches.isLoading || matchesData.matches.isRefreshing,
       }
     case "knockout":
       return {
-        count: dashboard.knockout.data.length,
-        isLoading: dashboard.knockout.isLoading || dashboard.knockout.isRefreshing,
+        count: knockoutData.knockout.data.length,
+        isLoading:
+          knockoutData.knockout.isLoading || knockoutData.knockout.isRefreshing,
       }
     case "top-scorers":
       return {
-        count: dashboard.topScorers.data.length,
+        count: topScorersData.topScorers.data.length,
         isLoading:
-          dashboard.topScorers.isLoading || dashboard.topScorers.isRefreshing,
+          topScorersData.topScorers.isLoading ||
+          topScorersData.topScorers.isRefreshing,
       }
     case "history":
       return {
-        count: dashboard.teamHistory.data.length,
+        count: historyData.teamHistory.data.length,
         isLoading:
-          dashboard.teamHistory.isLoading || dashboard.teamHistory.isRefreshing,
+          historyData.teamHistory.isLoading ||
+          historyData.teamHistory.isRefreshing,
       }
     default:
       return null
@@ -95,122 +121,168 @@ function getSectionBadgeState(
 }
 
 export function DashboardShell() {
-  const dashboard = useWorldCupDashboard()
-  const activeSection = homeSectionMap[dashboard.activeSection]
-  const databaseSection = homeSectionMap.database
-  const DatabaseSectionIcon = databaseSection.icon
-  const workspaceSections = React.useMemo(
-    () => homeSections.filter((section) => section.id !== "database"),
-    []
+  const editionWorkspace = useEditionWorkspaceData(null)
+  const navigation = useDashboardNavigation({
+    editions: editionWorkspace.editions.data,
+  })
+  const teamsData = useTeamsSectionData({
+    selectedEditionId: navigation.selectedEditionId,
+  })
+  const groupsData = useGroupsSectionData({
+    selectedEditionId: navigation.selectedEditionId,
+  })
+  const matchesData = useMatchesSectionData({
+    selectedEditionId: navigation.selectedEditionId,
+  })
+  const knockoutData = useKnockoutSectionData({
+    selectedEditionId: navigation.selectedEditionId,
+  })
+  const topScorersData = useTopScorersSectionData({
+    selectedEditionId: navigation.selectedEditionId,
+  })
+  const historyData = useHistorySectionData({
+    selectedEditionId: navigation.selectedEditionId,
+    selectedTeamId: navigation.selectedTeamId,
+  })
+
+  const selectedEdition = React.useMemo(
+    () =>
+      editionWorkspace.editions.data.find(
+        (edition) => edition.edition_id === navigation.selectedEditionId
+      ) ?? null,
+    [editionWorkspace.editions.data, navigation.selectedEditionId]
   )
+  const selectedTeam = React.useMemo(
+    () =>
+      teamsData.teams.data.find(
+        (team) => team.team_id === navigation.selectedTeamId
+      ) ?? null,
+    [navigation.selectedTeamId, teamsData.teams.data]
+  )
+  const selectedGroup = React.useMemo(
+    () =>
+      groupsData.groupedGroups.find(
+        (group) => group.group_id === navigation.selectedGroupId
+      ) ?? null,
+    [groupsData.groupedGroups, navigation.selectedGroupId]
+  )
+  const selectedMatch = React.useMemo(
+    () =>
+      matchesData.matches.data.find(
+        (match) => match.match_id === navigation.selectedMatchId
+      ) ?? null,
+    [matchesData.matches.data, navigation.selectedMatchId]
+  )
+
+  const activeSection = homeSectionMap[navigation.activeSection]
   const sectionIndexHref = React.useMemo(
     () =>
       buildDashboardHref({
-        section: dashboard.activeSection,
-        editionId: dashboard.selectedEditionId,
+        section: navigation.activeSection,
+        editionId: navigation.selectedEditionId,
       }),
-    [dashboard.activeSection, dashboard.selectedEditionId]
+    [navigation.activeSection, navigation.selectedEditionId]
   )
   const isCommandCatalogLoading =
-    dashboard.editions.isLoading ||
-    dashboard.teams.isLoading ||
-    dashboard.groups.isLoading ||
-    dashboard.matches.isLoading
+    editionWorkspace.editions.isLoading ||
+    teamsData.teams.isLoading ||
+    groupsData.groups.isLoading ||
+    matchesData.matches.isLoading
   const isCommandCatalogRefreshing =
-    dashboard.editions.isRefreshing ||
-    dashboard.teams.isRefreshing ||
-    dashboard.groups.isRefreshing ||
-    dashboard.matches.isRefreshing
+    editionWorkspace.editions.isRefreshing ||
+    teamsData.teams.isRefreshing ||
+    groupsData.groups.isRefreshing ||
+    matchesData.matches.isRefreshing
   const activeDetailLabel = React.useMemo(() => {
-    if (!dashboard.isDetailRoute) {
+    if (!navigation.isDetailRoute) {
       return null
     }
 
-    switch (dashboard.activeSection) {
+    switch (navigation.activeSection) {
       case "teams":
       case "history":
-        return dashboard.selectedTeam?.team_name ?? `Team ${dashboard.routeDetailId}`
+        return selectedTeam?.team_name ?? `Team ${navigation.routeDetailId}`
       case "groups":
-        return dashboard.selectedGroup
-          ? `Group ${dashboard.selectedGroup.group_letter}`
-          : `Group ${dashboard.routeDetailId}`
+        return selectedGroup
+          ? `Group ${selectedGroup.group_letter}`
+          : `Group ${navigation.routeDetailId}`
       case "matches":
       case "knockout":
-        return dashboard.selectedMatch
-          ? formatMatchLabel(dashboard.selectedMatch)
-          : `Match ${dashboard.routeDetailId}`
+        return selectedMatch
+          ? formatMatchLabel(selectedMatch)
+          : `Match ${navigation.routeDetailId}`
       default:
         return null
     }
   }, [
-    dashboard.activeSection,
-    dashboard.isDetailRoute,
-    dashboard.routeDetailId,
-    dashboard.selectedGroup,
-    dashboard.selectedMatch,
-    dashboard.selectedTeam,
+    navigation.activeSection,
+    navigation.isDetailRoute,
+    navigation.routeDetailId,
+    selectedGroup,
+    selectedMatch,
+    selectedTeam,
   ])
   const isActiveDetailLoading = React.useMemo(() => {
-    if (!dashboard.isDetailRoute) {
+    if (!navigation.isDetailRoute) {
       return false
     }
 
-    switch (dashboard.activeSection) {
+    switch (navigation.activeSection) {
       case "teams":
       case "history":
         return (
-          dashboard.selectedTeam === null &&
-          (dashboard.teams.isLoading || dashboard.teams.isRefreshing)
+          selectedTeam === null &&
+          (teamsData.teams.isLoading || teamsData.teams.isRefreshing)
         )
       case "groups":
         return (
-          dashboard.selectedGroup === null &&
-          (dashboard.groups.isLoading || dashboard.groups.isRefreshing)
+          selectedGroup === null &&
+          (groupsData.groups.isLoading || groupsData.groups.isRefreshing)
         )
       case "matches":
       case "knockout":
         return (
-          dashboard.selectedMatch === null &&
-          (dashboard.matches.isLoading || dashboard.matches.isRefreshing)
+          selectedMatch === null &&
+          (matchesData.matches.isLoading || matchesData.matches.isRefreshing)
         )
       default:
         return false
     }
   }, [
-    dashboard.activeSection,
-    dashboard.groups.isLoading,
-    dashboard.groups.isRefreshing,
-    dashboard.isDetailRoute,
-    dashboard.matches.isLoading,
-    dashboard.matches.isRefreshing,
-    dashboard.selectedGroup,
-    dashboard.selectedMatch,
-    dashboard.selectedTeam,
-    dashboard.teams.isLoading,
-    dashboard.teams.isRefreshing,
+    groupsData.groups.isLoading,
+    groupsData.groups.isRefreshing,
+    matchesData.matches.isLoading,
+    matchesData.matches.isRefreshing,
+    navigation.activeSection,
+    navigation.isDetailRoute,
+    selectedGroup,
+    selectedMatch,
+    selectedTeam,
+    teamsData.teams.isLoading,
+    teamsData.teams.isRefreshing,
   ])
 
   return (
     <SidebarProvider defaultOpen>
       <HomeCommandCenter
-        open={dashboard.isCommandOpen}
-        onOpenChange={dashboard.setIsCommandOpen}
-        activeSection={dashboard.activeSection}
-        selectedEditionId={dashboard.selectedEditionId}
-        selectedTeamId={dashboard.selectedTeamId}
-        selectedGroupId={dashboard.selectedGroupId}
-        selectedMatchId={dashboard.selectedMatchId}
-        editions={dashboard.editions.data}
-        teams={dashboard.teams.data}
-        groups={dashboard.groupedGroups}
-        matches={dashboard.matches.data}
+        open={navigation.isCommandOpen}
+        onOpenChange={navigation.setIsCommandOpen}
+        activeSection={navigation.activeSection}
+        selectedEditionId={navigation.selectedEditionId}
+        selectedTeamId={navigation.selectedTeamId}
+        selectedGroupId={navigation.selectedGroupId}
+        selectedMatchId={navigation.selectedMatchId}
+        editions={editionWorkspace.editions.data}
+        teams={teamsData.teams.data}
+        groups={groupsData.groupedGroups}
+        matches={matchesData.matches.data}
         isCatalogLoading={isCommandCatalogLoading}
         isCatalogRefreshing={isCommandCatalogRefreshing}
-        onSelectEdition={dashboard.focusEdition}
-        onSelectSection={dashboard.focusSection}
-        onSelectTeam={(teamId) => dashboard.focusTeam(teamId, "teams")}
-        onSelectGroup={dashboard.focusGroup}
-        onSelectMatch={dashboard.focusMatch}
+        onSelectEdition={navigation.focusEdition}
+        onSelectSection={navigation.focusSection}
+        onSelectTeam={(teamId) => navigation.focusTeam(teamId, "teams")}
+        onSelectGroup={navigation.focusGroup}
+        onSelectMatch={navigation.focusMatch}
       />
 
       <Sidebar variant="inset" collapsible="icon">
@@ -234,19 +306,29 @@ export function DashboardShell() {
             <SidebarGroupLabel>Workspace</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {workspaceSections.map((section) => {
+                {homeSections.map((section) => {
                   const Icon = section.icon
-                  const badgeState = getSectionBadgeState(dashboard, section.id)
+                  const badgeState = getSectionBadgeState(
+                    {
+                      teamsData,
+                      groupsData,
+                      matchesData,
+                      knockoutData,
+                      topScorersData,
+                      historyData,
+                    },
+                    section.id
+                  )
                   const href = buildDashboardHref({
                     section: section.id,
-                    editionId: dashboard.selectedEditionId,
+                    editionId: navigation.selectedEditionId,
                   })
 
                   return (
                     <SidebarMenuItem key={section.id}>
                       <SidebarMenuButton
                         asChild
-                        isActive={dashboard.activeSection === section.id}
+                        isActive={navigation.activeSection === section.id}
                         tooltip={section.label}
                       >
                         <Link href={href}>
@@ -270,27 +352,6 @@ export function DashboardShell() {
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
-        <SidebarFooter>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                isActive={dashboard.activeSection === databaseSection.id}
-                tooltip={databaseSection.label}
-              >
-                <Link
-                  href={buildDashboardHref({
-                    section: databaseSection.id,
-                    editionId: dashboard.selectedEditionId,
-                  })}
-                >
-                  <DatabaseSectionIcon />
-                  <span>{databaseSection.label}</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarFooter>
         <SidebarRail />
       </Sidebar>
 
@@ -300,7 +361,7 @@ export function DashboardShell() {
             <div className="flex min-h-16 flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card px-4 py-3 lg:px-6">
               <div className="min-w-0">
                 <div className="flex items-start gap-1">
-                  {dashboard.isDetailRoute ? (
+                  {navigation.isDetailRoute ? (
                     <Button
                       asChild
                       variant="ghost"
@@ -323,7 +384,7 @@ export function DashboardShell() {
                             <Link
                               href={buildDashboardHref({
                                 section: "overview",
-                                editionId: dashboard.selectedEditionId,
+                                editionId: navigation.selectedEditionId,
                               })}
                             >
                               World Cup Ops
@@ -331,7 +392,7 @@ export function DashboardShell() {
                           </BreadcrumbLink>
                         </BreadcrumbItem>
                         <BreadcrumbSeparator />
-                        {dashboard.isDetailRoute ? (
+                        {navigation.isDetailRoute ? (
                           <>
                             <BreadcrumbItem>
                               <BreadcrumbLink asChild>
@@ -388,48 +449,46 @@ export function DashboardShell() {
 
           <div className="flex-1 px-4 py-6 lg:px-6 lg:py-8">
             <div className="space-y-6">
-              {dashboard.activeSection === "database" ? (
-                <DatabaseSection dashboard={dashboard} />
+              {navigation.activeSection === "database" ? <DatabaseSection /> : null}
+              {navigation.activeSection === "overview" ? (
+                <OverviewSection navigation={navigation} />
               ) : null}
-              {dashboard.activeSection === "overview" ? (
-                <OverviewSection dashboard={dashboard} />
-              ) : null}
-              {dashboard.activeSection === "teams" ? (
-                dashboard.isDetailRoute ? (
-                  <TeamDetailView dashboard={dashboard} initialTab="squad" />
+              {navigation.activeSection === "teams" ? (
+                navigation.isDetailRoute ? (
+                  <TeamDetailView navigation={navigation} initialTab="squad" />
                 ) : (
-                  <TeamsSection dashboard={dashboard} />
+                  <TeamsSection navigation={navigation} />
                 )
               ) : null}
-              {dashboard.activeSection === "groups" ? (
-                dashboard.isDetailRoute ? (
-                  <GroupDetailView dashboard={dashboard} />
+              {navigation.activeSection === "groups" ? (
+                navigation.isDetailRoute ? (
+                  <GroupDetailView navigation={navigation} />
                 ) : (
-                  <GroupsSection dashboard={dashboard} />
+                  <GroupsSection navigation={navigation} />
                 )
               ) : null}
-              {dashboard.activeSection === "matches" ? (
-                dashboard.isDetailRoute ? (
-                  <MatchDetailView dashboard={dashboard} />
+              {navigation.activeSection === "matches" ? (
+                navigation.isDetailRoute ? (
+                  <MatchDetailView navigation={navigation} />
                 ) : (
-                  <MatchesSection dashboard={dashboard} />
+                  <MatchesSection navigation={navigation} />
                 )
               ) : null}
-              {dashboard.activeSection === "knockout" ? (
-                dashboard.isDetailRoute ? (
-                  <MatchDetailView dashboard={dashboard} />
+              {navigation.activeSection === "knockout" ? (
+                navigation.isDetailRoute ? (
+                  <MatchDetailView navigation={navigation} />
                 ) : (
-                  <KnockoutSection dashboard={dashboard} />
+                  <KnockoutSection navigation={navigation} />
                 )
               ) : null}
-              {dashboard.activeSection === "top-scorers" ? (
-                <TopScorersSection dashboard={dashboard} />
+              {navigation.activeSection === "top-scorers" ? (
+                <TopScorersSection navigation={navigation} />
               ) : null}
-              {dashboard.activeSection === "history" ? (
-                dashboard.isDetailRoute ? (
-                  <TeamDetailView dashboard={dashboard} initialTab="history" />
+              {navigation.activeSection === "history" ? (
+                navigation.isDetailRoute ? (
+                  <TeamDetailView navigation={navigation} initialTab="history" />
                 ) : (
-                  <HistorySection dashboard={dashboard} />
+                  <HistorySection navigation={navigation} />
                 )
               ) : null}
             </div>
@@ -437,12 +496,12 @@ export function DashboardShell() {
         </div>
 
         <NaturalQueryDrawer
-          section={dashboard.activeSection}
-          editionId={dashboard.selectedEditionId}
-          editionYear={dashboard.selectedEdition?.edition_year ?? null}
-          teamId={dashboard.selectedTeamId}
-          matchId={dashboard.selectedMatchId}
-          groupId={dashboard.selectedGroupId}
+          section={navigation.activeSection}
+          editionId={navigation.selectedEditionId}
+          editionYear={selectedEdition?.edition_year ?? null}
+          teamId={navigation.selectedTeamId}
+          matchId={navigation.selectedMatchId}
+          groupId={navigation.selectedGroupId}
         />
       </SidebarInset>
     </SidebarProvider>
