@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils"
 type SectionHeadingProps = {
   eyebrow?: string
   title: string
-  description: string
+  description?: string
   actions?: React.ReactNode
   className?: string
 }
@@ -34,9 +34,11 @@ export function SectionHeading({
           <h2 className="font-heading text-2xl font-semibold tracking-tight text-foreground">
             {title}
           </h2>
-          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-            {description}
-          </p>
+          {description ? (
+            <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+              {description}
+            </p>
+          ) : null}
         </div>
       </div>
       {actions ? <div className="flex items-center gap-2">{actions}</div> : null}

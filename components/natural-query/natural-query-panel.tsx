@@ -8,7 +8,6 @@ import {
   LoaderCircle,
   Play,
   RefreshCcw,
-  Server,
   ShieldAlert,
   Square,
 } from "lucide-react"
@@ -18,7 +17,6 @@ import {
   PanelErrorState,
   SemanticBadge,
 } from "@/components/home/panel-states"
-import { SectionHeading } from "@/components/home/section-heading"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
@@ -125,12 +123,9 @@ export function NaturalQueryPanel(props: NaturalQueryPanelProps) {
 
   return (
     <div className="space-y-6">
-      <SectionHeading
-        eyebrow="Local SQL"
-        title="Natural Query"
-        description="Local Ollama SQL stays secondary to the operational workspace: provider status, SQL preview, controlled execution, and tabular results remain visible in the same surface."
-        actions={statusActions}
-      />
+      <div className="flex justify-end border-b border-border/80 pb-4">
+        <div className="flex flex-wrap items-center gap-2">{statusActions}</div>
+      </div>
 
       {assistant.failure ? (
         <Alert variant="destructive">
@@ -146,78 +141,6 @@ export function NaturalQueryPanel(props: NaturalQueryPanelProps) {
       <div className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
         <div className="space-y-4">
           <Card className="border-border/80 shadow-none">
-            <CardHeader className="border-b border-border/70">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <CardTitle>Local model status</CardTitle>
-                  <CardDescription>
-                    Natural Query uses the configured local Ollama server for SQL
-                    generation while keeping SQL preview and controlled execution in
-                    the same operational surface.
-                  </CardDescription>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <SemanticBadge tone="neutral">
-                    {assistant.provider?.provider ?? "ollama"}
-                  </SemanticBadge>
-                  <SemanticBadge tone={providerTone}>{providerLabel}</SemanticBadge>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4 pt-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <SemanticBadge tone={providerTone}>{providerLabel}</SemanticBadge>
-                <span className="text-sm text-muted-foreground">
-                  {assistant.statusDetail}
-                </span>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
-                  <div className="mb-1 flex items-center gap-2 text-sm font-medium text-foreground">
-                    <Server className="size-4 text-muted-foreground" />
-                    Provider
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {assistant.provider?.provider ?? "ollama"}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Model: {assistant.provider?.model ?? "Unknown"}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
-                  <div className="mb-1 flex items-center gap-2 text-sm font-medium text-foreground">
-                    <Database className="size-4 text-muted-foreground" />
-                    Endpoint
-                  </div>
-                  <p className="break-all text-sm text-muted-foreground">
-                    {assistant.provider?.baseUrl ?? "Unavailable"}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Generation runs through the existing backend proxy path.
-                  </p>
-                </div>
-              </div>
-
-              {assistant.providerStatus === "unavailable" ? (
-                <Alert variant="destructive">
-                  <ShieldAlert />
-                  <AlertTitle>{assistant.statusSummary}</AlertTitle>
-                  <AlertDescription>{assistant.statusDetail}</AlertDescription>
-                </Alert>
-              ) : null}
-            </CardContent>
-          </Card>
-
-          <Card className="border-border/80 shadow-none">
-            <CardHeader className="border-b border-border/70">
-              <CardTitle>Prompt</CardTitle>
-              <CardDescription>
-                Ask for domain-specific SQL in plain language while staying anchored to
-                the current World Cup selection and the configured local Ollama
-                server.
-              </CardDescription>
-            </CardHeader>
             <CardContent className="space-y-4 pt-4">
               <Textarea
                 value={prompt}

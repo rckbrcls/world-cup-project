@@ -14,14 +14,15 @@ import {
   groupMatchesByPhase,
 } from "@/lib/world-cup/selectors"
 import type {
+  DatabaseStatus,
+  DatabaseOperationResult,
   EditionMatchRow,
   EditionSummary,
   EditionTeamRow,
-  SyntheticDataOperationResult,
-  SyntheticDataStatus,
 } from "@/lib/world-cup/types"
 
 export type HomeSectionId =
+  | "database"
   | "overview"
   | "teams"
   | "groups"
@@ -65,14 +66,17 @@ export function useWorldCupDashboard() {
     load: (signal) => worldCupApi.health({ signal }),
   })
 
-  const syntheticDataStatus = useAsyncResource({
-    key: ["synthetic-data-status"],
-    initialData: null as SyntheticDataStatus | null,
-    load: (signal) => worldCupApi.getSyntheticDataStatus({ signal }),
+  const databaseStatus = useAsyncResource({
+    key: ["database-status"],
+    initialData: null as DatabaseStatus | null,
+    load: (signal) => worldCupApi.getDatabaseStatus({ signal }),
   })
+
+  const databaseReady = databaseStatus.data?.reporting_layer_ready ?? false
 
   const editions = useAsyncResource({
     key: ["editions"],
+    enabled: databaseReady,
     initialData: [] as EditionSummary[],
     load: (signal) => worldCupApi.listEditions({ signal }),
   })
@@ -96,35 +100,35 @@ export function useWorldCupDashboard() {
 
   const teams = useAsyncResource({
     key: ["teams", selectedEditionId],
-    enabled: selectedEditionId !== null,
+    enabled: databaseReady && selectedEditionId !== null,
     initialData: [] as EditionTeamRow[],
     load: (signal) => worldCupApi.listEditionTeams(selectedEditionId!, { signal }),
   })
 
   const groups = useAsyncResource({
     key: ["groups", selectedEditionId],
-    enabled: selectedEditionId !== null,
+    enabled: databaseReady && selectedEditionId !== null,
     initialData: [],
     load: (signal) => worldCupApi.listEditionGroups(selectedEditionId!, { signal }),
   })
 
   const matches = useAsyncResource({
     key: ["matches", selectedEditionId],
-    enabled: selectedEditionId !== null,
+    enabled: databaseReady && selectedEditionId !== null,
     initialData: [] as EditionMatchRow[],
     load: (signal) => worldCupApi.listEditionMatches(selectedEditionId!, { signal }),
   })
 
   const knockout = useAsyncResource({
     key: ["knockout", selectedEditionId],
-    enabled: selectedEditionId !== null,
+    enabled: databaseReady && selectedEditionId !== null,
     initialData: [],
     load: (signal) => worldCupApi.listKnockoutMatches(selectedEditionId!, { signal }),
   })
 
   const topScorers = useAsyncResource({
     key: ["top-scorers", selectedEditionId],
-    enabled: selectedEditionId !== null,
+    enabled: databaseReady && selectedEditionId !== null,
     initialData: [],
     load: (signal) => worldCupApi.listTopScorers(selectedEditionId!, { signal }),
   })
@@ -180,21 +184,21 @@ export function useWorldCupDashboard() {
 
   const standings = useAsyncResource({
     key: ["standings", selectedGroupId],
-    enabled: selectedGroupId !== null,
+    enabled: databaseReady && selectedGroupId !== null,
     initialData: [],
     load: (signal) => worldCupApi.listGroupStandings(selectedGroupId!, { signal }),
   })
 
   const teamHistory = useAsyncResource({
     key: ["history", selectedTeamId],
-    enabled: selectedTeamId !== null,
+    enabled: databaseReady && selectedTeamId !== null,
     initialData: [],
     load: (signal) => worldCupApi.listTeamHistory(selectedTeamId!, { signal }),
   })
 
   const squad = useAsyncResource({
     key: ["squad", selectedEditionId, selectedTeamId],
-    enabled: selectedEditionId !== null && selectedTeamId !== null,
+    enabled: databaseReady && selectedEditionId !== null && selectedTeamId !== null,
     initialData: [],
     load: (signal) =>
       worldCupApi.listTeamSquad(selectedEditionId!, selectedTeamId!, { signal }),
@@ -202,14 +206,14 @@ export function useWorldCupDashboard() {
 
   const matchEvents = useAsyncResource({
     key: ["match-events", selectedMatchId],
-    enabled: selectedMatchId !== null,
+    enabled: databaseReady && selectedMatchId !== null,
     initialData: [],
     load: (signal) => worldCupApi.listMatchEvents(selectedMatchId!, { signal }),
   })
 
-  const [syntheticMutationAction, setSyntheticMutationAction] =
-    React.useState<"populate" | "cleanup" | null>(null)
-  const [syntheticMutationErrorMessage, setSyntheticMutationErrorMessage] =
+  const [databaseMutationAction, setDatabaseMutationAction] =
+    React.useState<"initialize" | "reporting" | "populate" | "cleanup" | null>(null)
+  const [databaseMutationErrorMessage, setDatabaseMutationErrorMessage] =
     React.useState<string | null>(null)
 
   const overviewMetrics = React.useMemo(
@@ -235,7 +239,7 @@ export function useWorldCupDashboard() {
   )
 
   const reloadAllData = React.useCallback(() => {
-    syntheticDataStatus.reload()
+    databaseStatus.reload()
     editions.reload()
     teams.reload()
     groups.reload()
@@ -247,6 +251,7 @@ export function useWorldCupDashboard() {
     squad.reload()
     matchEvents.reload()
   }, [
+    databaseStatus,
     editions,
     groups,
     knockout,
@@ -254,28 +259,35 @@ export function useWorldCupDashboard() {
     matches,
     squad,
     standings,
-    syntheticDataStatus,
     teamHistory,
     teams,
     topScorers,
   ])
 
-  const runSyntheticMutation = React.useCallback(
+  const runDatabaseMutation = React.useCallback(
     async (
-      action: "populate" | "cleanup"
-    ): Promise<SyntheticDataOperationResult> => {
-      if (syntheticMutationAction !== null) {
-        throw new Error("A synthetic data operation is already in progress.")
+      action: "initialize" | "reporting" | "populate" | "cleanup"
+    ): Promise<DatabaseOperationResult> => {
+      if (databaseMutationAction !== null) {
+        throw new Error("A database operation is already in progress.")
       }
 
-      setSyntheticMutationAction(action)
-      setSyntheticMutationErrorMessage(null)
+      setDatabaseMutationAction(action)
+      setDatabaseMutationErrorMessage(null)
 
       try {
-        const result =
-          action === "populate"
-            ? await worldCupApi.populateSyntheticData()
-            : await worldCupApi.removeSyntheticData()
+        const result = await (() => {
+          switch (action) {
+            case "initialize":
+              return worldCupApi.initializeDatabase()
+            case "reporting":
+              return worldCupApi.applyReportingQueries()
+            case "populate":
+              return worldCupApi.populateDatabase()
+            case "cleanup":
+              return worldCupApi.cleanupDatabase()
+          }
+        })()
 
         reloadAllData()
         return result
@@ -283,25 +295,35 @@ export function useWorldCupDashboard() {
         const errorMessage =
           error instanceof Error
             ? error.message
-            : "Unable to complete the synthetic data operation."
+            : "Unable to complete the database operation."
 
-        setSyntheticMutationErrorMessage(errorMessage)
+        setDatabaseMutationErrorMessage(errorMessage)
         throw error
       } finally {
-        setSyntheticMutationAction(null)
+        setDatabaseMutationAction(null)
       }
     },
-    [reloadAllData, syntheticMutationAction]
+    [databaseMutationAction, reloadAllData]
+  )
+
+  const initializeDatabase = React.useCallback(
+    () => runDatabaseMutation("initialize"),
+    [runDatabaseMutation]
+  )
+
+  const applyReportingQueries = React.useCallback(
+    () => runDatabaseMutation("reporting"),
+    [runDatabaseMutation]
   )
 
   const populateSyntheticData = React.useCallback(
-    () => runSyntheticMutation("populate"),
-    [runSyntheticMutation]
+    () => runDatabaseMutation("populate"),
+    [runDatabaseMutation]
   )
 
   const removeSyntheticData = React.useCallback(
-    () => runSyntheticMutation("cleanup"),
-    [runSyntheticMutation]
+    () => runDatabaseMutation("cleanup"),
+    [runDatabaseMutation]
   )
 
   const focusSection = React.useCallback((section: HomeSectionId) => {
@@ -360,11 +382,11 @@ export function useWorldCupDashboard() {
     selectedMatchId,
     selectedMatch,
     health,
-    syntheticDataStatus,
-    syntheticDataMutation: {
-      action: syntheticMutationAction,
-      errorMessage: syntheticMutationErrorMessage,
-      isPending: syntheticMutationAction !== null,
+    databaseStatus,
+    databaseMutation: {
+      action: databaseMutationAction,
+      errorMessage: databaseMutationErrorMessage,
+      isPending: databaseMutationAction !== null,
     },
     editions,
     teams,
@@ -385,6 +407,8 @@ export function useWorldCupDashboard() {
     focusMatch,
     focusSection,
     focusTeam,
+    initializeDatabase,
+    applyReportingQueries,
     populateSyntheticData,
     removeSyntheticData,
     reloadAllData,

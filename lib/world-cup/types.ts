@@ -10,7 +10,12 @@ export type ApiHealth = {
   status: string
 }
 
-export type SyntheticDataStatus = {
+export type DatabaseStatus = {
+  schema_exists: boolean
+  reporting_layer_ready: boolean
+  seed_functions_ready: boolean
+  cleanup_function_ready: boolean
+  synthetic_status_ready: boolean
   has_active_batch: boolean
   active_batch_id: number | null
   dataset_key: string | null
@@ -20,15 +25,25 @@ export type SyntheticDataStatus = {
   table_counts: Record<string, number>
   total_rows: number
   history_batch_count: number
+  edition_count: number
+  team_count: number
+  match_count: number
 }
 
-export type SyntheticDataOperationResult = {
-  operation: "populate" | "cleanup"
-  status: "seeded" | "already_seeded" | "cleaned" | "nothing_to_clean"
-  active_batch_id: number | null
-  edition_years: number[]
-  table_counts: Record<string, number>
-  total_rows: number
+export type DatabaseOperationResult = DatabaseStatus & {
+  operation:
+    | "initialize"
+    | "apply_reporting"
+    | "populate"
+    | "cleanup"
+  status:
+    | "initialized"
+    | "already_initialized"
+    | "queries_applied"
+    | "seeded"
+    | "already_seeded"
+    | "cleaned"
+    | "nothing_to_clean"
   message: string
 }
 

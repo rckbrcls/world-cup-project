@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react"
 import {
   CalendarDays,
+  Database,
   FileCode2,
   GitBranch,
   History,
@@ -22,10 +23,17 @@ export type HomeSectionDefinition = {
 
 export const homeSections: HomeSectionDefinition[] = [
   {
+    id: "database",
+    label: "Database",
+    shortLabel: "Database",
+    description: "Schema setup, query-layer maintenance, and synthetic data operations.",
+    icon: Database,
+  },
+  {
     id: "overview",
     label: "Overview",
     shortLabel: "Overview",
-    description: "Edition snapshot, podium, volume, and final context.",
+    description: "",
     icon: LayoutDashboard,
   },
   {
@@ -74,7 +82,7 @@ export const homeSections: HomeSectionDefinition[] = [
     id: "natural-query",
     label: "Natural Query",
     shortLabel: "Query",
-    description: "Local Ollama SQL generation, review, and controlled execution.",
+    description: "",
     icon: FileCode2,
   },
 ]

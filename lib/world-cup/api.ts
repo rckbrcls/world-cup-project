@@ -1,5 +1,7 @@
 import type {
   ApiHealth,
+  DatabaseOperationResult,
+  DatabaseStatus,
   EditionGroupRow,
   EditionMatchRow,
   EditionSummary,
@@ -7,8 +9,6 @@ import type {
   GroupStandingRow,
   KnockoutMatchRow,
   MatchEventRow,
-  SyntheticDataOperationResult,
-  SyntheticDataStatus,
   TeamHistoryRow,
   TeamSquadRow,
   TopScorerRow,
@@ -79,15 +79,27 @@ async function requestJson<T>(path: string, options: RequestOptions = {}) {
 export const worldCupApi = {
   health: (options?: RequestOptions) =>
     requestJson<ApiHealth>("/health", options),
-  getSyntheticDataStatus: (options?: RequestOptions) =>
-    requestJson<SyntheticDataStatus>("/synthetic-data/status", options),
-  populateSyntheticData: (options?: Omit<RequestOptions, "method" | "body">) =>
-    requestJson<SyntheticDataOperationResult>("/synthetic-data/populate", {
+  getDatabaseStatus: (options?: RequestOptions) =>
+    requestJson<DatabaseStatus>("/database/status", options),
+  initializeDatabase: (options?: Omit<RequestOptions, "method" | "body">) =>
+    requestJson<DatabaseOperationResult>("/database/setup", {
       method: "POST",
       signal: options?.signal,
     }),
-  removeSyntheticData: (options?: Omit<RequestOptions, "method" | "body">) =>
-    requestJson<SyntheticDataOperationResult>("/synthetic-data", {
+  applyReportingQueries: (
+    options?: Omit<RequestOptions, "method" | "body">
+  ) =>
+    requestJson<DatabaseOperationResult>("/database/reporting", {
+      method: "POST",
+      signal: options?.signal,
+    }),
+  populateDatabase: (options?: Omit<RequestOptions, "method" | "body">) =>
+    requestJson<DatabaseOperationResult>("/database/populate", {
+      method: "POST",
+      signal: options?.signal,
+    }),
+  cleanupDatabase: (options?: Omit<RequestOptions, "method" | "body">) =>
+    requestJson<DatabaseOperationResult>("/database/cleanup", {
       method: "DELETE",
       signal: options?.signal,
     }),
