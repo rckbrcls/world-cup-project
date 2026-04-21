@@ -34,6 +34,7 @@ import { Button } from "@/components/ui/button"
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -96,6 +97,12 @@ function getSectionBadgeState(
 export function DashboardShell() {
   const dashboard = useWorldCupDashboard()
   const activeSection = homeSectionMap[dashboard.activeSection]
+  const databaseSection = homeSectionMap.database
+  const DatabaseSectionIcon = databaseSection.icon
+  const workspaceSections = React.useMemo(
+    () => homeSections.filter((section) => section.id !== "database"),
+    []
+  )
   const sectionIndexHref = React.useMemo(
     () =>
       buildDashboardHref({
@@ -227,7 +234,7 @@ export function DashboardShell() {
             <SidebarGroupLabel>Workspace</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {homeSections.map((section) => {
+                {workspaceSections.map((section) => {
                   const Icon = section.icon
                   const badgeState = getSectionBadgeState(dashboard, section.id)
                   const href = buildDashboardHref({
@@ -263,6 +270,27 @@ export function DashboardShell() {
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
+        <SidebarFooter>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={dashboard.activeSection === databaseSection.id}
+                tooltip={databaseSection.label}
+              >
+                <Link
+                  href={buildDashboardHref({
+                    section: databaseSection.id,
+                    editionId: dashboard.selectedEditionId,
+                  })}
+                >
+                  <DatabaseSectionIcon />
+                  <span>{databaseSection.label}</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
         <SidebarRail />
       </Sidebar>
 
