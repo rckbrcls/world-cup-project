@@ -1,81 +1,5 @@
 export type NaturalQueryProviderStatus = "ready" | "unavailable"
 
-export type GemmaModelTier = "recommended" | "experimental"
-
-export type GemmaModelStability = "stable" | "experimental" | "known-issue"
-
-export type GemmaPromptStyle = "gemma-3-chat" | "plain-json"
-
-export type GemmaEngineLifecycle =
-  | "unavailable"
-  | "unsupported"
-  | "not-downloaded"
-  | "ready-to-download"
-  | "downloaded"
-  | "downloading"
-  | "paused"
-  | "download-error"
-  | "initializing"
-  | "warming"
-  | "ready"
-  | "fallback"
-
-export type GemmaInitializationStage =
-  | "loading-runtime"
-  | "loading-wasm"
-  | "creating-engine"
-  | "warming"
-
-export type GemmaModelManifest = {
-  id: string
-  label: string
-  family: string
-  variant: string
-  tier: GemmaModelTier
-  stability: GemmaModelStability
-  promptStyle: GemmaPromptStyle
-  description: string
-  statusNote: string
-  downloadUrl: string
-  expectedBytes: number
-  minBrowserCapabilities: {
-    requiresWebGpu: boolean
-    requiresSecureContext: boolean
-    recommendedDeviceMemoryGb: number
-    recommendedAvailableStorageBytes: number
-  }
-  recommendedMemoryNotes: string
-}
-
-export type GemmaModelAssessment = {
-  tier: GemmaModelTier
-  stability: GemmaModelStability
-  knownIssueReason: string | null
-  detail: string | null
-  isBlocked: boolean
-}
-
-export type GemmaEnvironmentReport = {
-  lifecycle: GemmaEngineLifecycle
-  reason: string
-  summary: string
-  detail: string
-  isOnDevice: boolean
-  hasStoredModel: boolean
-  capabilities: {
-    hasWebGpu: boolean
-    isSecureContext: boolean
-    cacheStorageAvailable: boolean
-    storageManagerAvailable: boolean
-    quotaBytes: number | null
-    usageBytes: number | null
-    availableStorageBytes: number | null
-    deviceMemoryGb: number | null
-    hardwareConcurrency: number | null
-  }
-  notices: string[]
-}
-
 export type SqlGenerationState =
   | "idle"
   | "generating"
@@ -116,6 +40,7 @@ export type NaturalQueryProviderState = {
 
 export type SqlDraft = {
   rawResponse: string
+  assistantMessage: string | null
   generatedSql: string | null
   previewSql: string | null
   normalizedSql: string | null
@@ -135,9 +60,8 @@ export type SqlExecutionResult = {
 }
 
 export type SqlAssistantFailure = {
-  scope: "environment" | "generation" | "validation" | "execution"
+  scope: "environment" | "generation" | "validation" | "execution" | "summary"
   reason?: string
-  stage?: GemmaInitializationStage | null
   message: string
   detail?: string
   recoverable: boolean
@@ -155,3 +79,70 @@ export type NaturalQueryGenerateResponse = {
 export type NaturalQueryExecutionRequest = {
   sql: string
 }
+
+export type SqlProposalState =
+  | "pending-approval"
+  | "dismissed"
+  | "executing"
+  | "executed"
+  | "failed"
+  | "canceled"
+
+export type SqlExecutionCardState =
+  | "executing"
+  | "success"
+  | "empty"
+  | "error"
+  | "canceled"
+
+type SqlAssistantThreadEntryBase = {
+  id: string
+  createdAt: string
+}
+
+export type SqlAssistantUserMessageEntry = SqlAssistantThreadEntryBase & {
+  kind: "user-message"
+  text: string
+}
+
+export type SqlAssistantMessageEntry = SqlAssistantThreadEntryBase & {
+  kind: "assistant-message"
+  text: string
+}
+
+export type SqlAssistantSystemStatusTone =
+  | "neutral"
+  | "success"
+  | "warning"
+  | "destructive"
+
+export type SqlAssistantSystemStatusEntry = SqlAssistantThreadEntryBase & {
+  kind: "system-status"
+  tone: SqlAssistantSystemStatusTone
+  title: string
+  detail: string
+}
+
+export type SqlAssistantSqlProposalEntry = SqlAssistantThreadEntryBase & {
+  kind: "sql-proposal-card"
+  proposalState: SqlProposalState
+  userPrompt: string
+  context: SqlAssistantContext
+  draft: SqlDraft
+}
+
+export type SqlAssistantExecutionResultEntry = SqlAssistantThreadEntryBase & {
+  kind: "execution-result-card"
+  proposalId: string
+  state: SqlExecutionCardState
+  sql: string
+  result: SqlExecutionResult | null
+  errorMessage: string | null
+}
+
+export type SqlAssistantThreadEntry =
+  | SqlAssistantUserMessageEntry
+  | SqlAssistantMessageEntry
+  | SqlAssistantSystemStatusEntry
+  | SqlAssistantSqlProposalEntry
+  | SqlAssistantExecutionResultEntry

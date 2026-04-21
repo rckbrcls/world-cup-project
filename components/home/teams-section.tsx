@@ -3,11 +3,12 @@
 import * as React from "react"
 
 import {
+  LoadingOverlay,
   PanelEmptyState,
   PanelErrorState,
   PanelFilteredEmptyState,
-  PanelLoadingState,
   SemanticBadge,
+  TableSkeleton,
 } from "@/components/home/panel-states"
 import { SectionHeading } from "@/components/home/section-heading"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -38,6 +39,20 @@ import { formatNumber } from "@/lib/world-cup/format"
 import type { useWorldCupDashboard } from "@/hooks/use-world-cup-dashboard"
 
 type DashboardState = ReturnType<typeof useWorldCupDashboard>
+
+function TeamsTableSkeletonCard() {
+  return (
+    <Card className="border-border/80 shadow-none">
+      <CardHeader className="border-b border-border/70">
+        <CardTitle>Edition team registry</CardTitle>
+        <CardDescription>Loading edition roster from the current backend.</CardDescription>
+      </CardHeader>
+      <CardContent className="pt-4">
+        <TableSkeleton rows={8} columns={5} />
+      </CardContent>
+    </Card>
+  )
+}
 
 export function TeamsSection({ dashboard }: { dashboard: DashboardState }) {
   const [searchValue, setSearchValue] = React.useState("")
@@ -103,7 +118,7 @@ export function TeamsSection({ dashboard }: { dashboard: DashboardState }) {
       <SectionHeading
         eyebrow="Competition registry"
         title="Teams"
-        description="The table stays dense and operational: click a row to move the route to that team and open its detail surface."
+        description="The table stays dense and operational: click a row to open the dedicated team detail page for that route."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Input
@@ -140,7 +155,7 @@ export function TeamsSection({ dashboard }: { dashboard: DashboardState }) {
       />
 
       {dashboard.teams.isLoading ? (
-        <PanelLoadingState rows={8} />
+        <TeamsTableSkeletonCard />
       ) : dashboard.teams.isError && !dashboard.teams.data.length ? (
         <PanelErrorState
           title="Unable to load edition teams"
@@ -158,80 +173,85 @@ export function TeamsSection({ dashboard }: { dashboard: DashboardState }) {
           description="Adjust the text search or group filter to recover the edition roster."
         />
       ) : (
-        <Card className="border-border/80 shadow-none">
-          <CardHeader className="border-b border-border/70">
-            <CardTitle>Edition team registry</CardTitle>
-            <CardDescription>
-              {formatNumber(filteredTeams.length)} teams visible from{" "}
-              {formatNumber(dashboard.teams.data.length)} loaded rows.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-4">
-            {dashboard.teams.errorMessage && dashboard.teams.data.length ? (
-              <Alert>
-                <AlertTitle>Showing cached registry rows</AlertTitle>
-                <AlertDescription>
-                  {dashboard.teams.errorMessage}
-                </AlertDescription>
-              </Alert>
-            ) : null}
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Team</TableHead>
-                  <TableHead>Country</TableHead>
-                  <TableHead>Coach</TableHead>
-                  <TableHead>Group</TableHead>
-                  <TableHead className="text-right">Final rank</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredTeams.map((team) => {
-                  const isSelected = team.team_id === dashboard.selectedTeamId
-                  const rankTone =
-                    team.final_rank === 1
-                      ? "champion"
-                      : team.final_rank !== null && team.final_rank <= 4
-                        ? "qualified"
-                        : "neutral"
+        <LoadingOverlay
+          loading={dashboard.teams.isRefreshing}
+          skeleton={<TeamsTableSkeletonCard />}
+        >
+          <Card className="border-border/80 shadow-none">
+            <CardHeader className="border-b border-border/70">
+              <CardTitle>Edition team registry</CardTitle>
+              <CardDescription>
+                {formatNumber(filteredTeams.length)} teams visible from{" "}
+                {formatNumber(dashboard.teams.data.length)} loaded rows.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-4">
+              {dashboard.teams.errorMessage && dashboard.teams.data.length ? (
+                <Alert>
+                  <AlertTitle>Showing cached registry rows</AlertTitle>
+                  <AlertDescription>
+                    {dashboard.teams.errorMessage}
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Team</TableHead>
+                    <TableHead>Country</TableHead>
+                    <TableHead>Coach</TableHead>
+                    <TableHead>Group</TableHead>
+                    <TableHead className="text-right">Final rank</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredTeams.map((team) => {
+                    const isSelected = team.team_id === dashboard.selectedTeamId
+                    const rankTone =
+                      team.final_rank === 1
+                        ? "champion"
+                        : team.final_rank !== null && team.final_rank <= 4
+                          ? "qualified"
+                          : "neutral"
 
-                  return (
-                    <TableRow
-                      key={team.team_id}
-                      data-state={isSelected ? "selected" : undefined}
-                      className="cursor-pointer"
-                      onClick={() => dashboard.focusTeam(team.team_id, "teams")}
-                    >
-                      <TableCell className="font-medium text-foreground">
-                        {team.team_name}
-                      </TableCell>
-                      <TableCell>{team.country_name}</TableCell>
-                      <TableCell className="max-w-[18rem] truncate">
-                        {team.coach_name}
-                      </TableCell>
-                      <TableCell>
-                        {team.group_letter ? (
-                          <SemanticBadge tone="neutral">
-                            Group {team.group_letter}
-                          </SemanticBadge>
-                        ) : (
-                          <span className="text-muted-foreground">Knockout only</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {team.final_rank ? (
-                          <SemanticBadge tone={rankTone}>{team.final_rank}</SemanticBadge>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                    return (
+                      <TableRow
+                        key={team.team_id}
+                        data-state={isSelected ? "selected" : undefined}
+                        className="cursor-pointer"
+                        onClick={() => dashboard.focusTeam(team.team_id, "teams")}
+                      >
+                        <TableCell className="font-medium text-foreground">
+                          {team.team_name}
+                        </TableCell>
+                        <TableCell>{team.country_name}</TableCell>
+                        <TableCell className="max-w-[18rem] truncate">
+                          {team.coach_name}
+                        </TableCell>
+                        <TableCell>
+                          {team.group_letter ? (
+                            <SemanticBadge tone="neutral">
+                              Group {team.group_letter}
+                            </SemanticBadge>
+                          ) : (
+                            <span className="text-muted-foreground">Knockout only</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {team.final_rank ? (
+                            <SemanticBadge tone={rankTone}>{team.final_rank}</SemanticBadge>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </LoadingOverlay>
       )}
     </div>
   )

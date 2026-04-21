@@ -3,11 +3,12 @@
 import * as React from "react"
 
 import {
+  LoadingOverlay,
   PanelEmptyState,
   PanelErrorState,
   PanelFilteredEmptyState,
-  PanelLoadingState,
   SemanticBadge,
+  TableSkeleton,
 } from "@/components/home/panel-states"
 import { SectionHeading } from "@/components/home/section-heading"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -38,6 +39,20 @@ import { formatKickoffDate, formatMatchLabel, formatPenaltyLabel } from "@/lib/w
 import type { useWorldCupDashboard } from "@/hooks/use-world-cup-dashboard"
 
 type DashboardState = ReturnType<typeof useWorldCupDashboard>
+
+function MatchesTableSkeletonCard() {
+  return (
+    <Card className="border-border/80 shadow-none">
+      <CardHeader className="border-b border-border/70">
+        <CardTitle>Edition fixtures</CardTitle>
+        <CardDescription>Loading fixtures for the selected edition.</CardDescription>
+      </CardHeader>
+      <CardContent className="pt-4">
+        <TableSkeleton rows={8} columns={6} />
+      </CardContent>
+    </Card>
+  )
+}
 
 export function MatchesSection({ dashboard }: { dashboard: DashboardState }) {
   const [searchValue, setSearchValue] = React.useState("")
@@ -111,7 +126,7 @@ export function MatchesSection({ dashboard }: { dashboard: DashboardState }) {
       <SectionHeading
         eyebrow="Fixture control"
         title="Matches"
-        description="Every match row stays tied to the backend contract and now navigates directly to a route-backed match detail."
+        description="Every match row stays tied to the backend contract and opens a dedicated match detail page."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Input
@@ -160,7 +175,7 @@ export function MatchesSection({ dashboard }: { dashboard: DashboardState }) {
       />
 
       {dashboard.matches.isLoading ? (
-        <PanelLoadingState rows={8} />
+        <MatchesTableSkeletonCard />
       ) : dashboard.matches.isError && !dashboard.matches.data.length ? (
         <PanelErrorState
           title="Unable to load matches"
@@ -178,92 +193,97 @@ export function MatchesSection({ dashboard }: { dashboard: DashboardState }) {
           description="Adjust the search, phase, or group filter to recover matches."
         />
       ) : (
-        <Card className="border-border/80 shadow-none">
-          <CardHeader className="border-b border-border/70">
-            <CardTitle>Edition fixtures</CardTitle>
-            <CardDescription>
-              Click any row to move the route and open the selected fixture detail.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-4">
-            {dashboard.matches.errorMessage && dashboard.matches.data.length ? (
-              <Alert>
-                <AlertTitle>Showing cached fixtures</AlertTitle>
-                <AlertDescription>{dashboard.matches.errorMessage}</AlertDescription>
-              </Alert>
-            ) : null}
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Phase</TableHead>
-                  <TableHead>Match</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Venue</TableHead>
-                  <TableHead>Score</TableHead>
-                  <TableHead>Winner</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredMatches.map((match) => (
-                  <TableRow
-                    key={match.match_id}
-                    data-state={
-                      match.match_id === dashboard.selectedMatchId
-                        ? "selected"
-                        : undefined
-                    }
-                    className="cursor-pointer"
-                    onClick={() => dashboard.focusMatch(match.match_id)}
-                  >
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div>{match.phase_name}</div>
-                        {match.group_letter ? (
-                          <SemanticBadge tone="neutral">
-                            Group {match.group_letter}
-                          </SemanticBadge>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-medium text-foreground">
-                      {formatMatchLabel(match)}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {formatKickoffDate(match.kickoff_at)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div>{match.stadium_name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {match.host_city_name}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="font-heading text-lg font-semibold tabular-nums text-foreground">
-                          {match.final_score}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatPenaltyLabel(match.penalty_score)}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {match.winner_team_name ? (
-                        <SemanticBadge tone="qualified">
-                          {match.winner_team_name}
-                        </SemanticBadge>
-                      ) : (
-                        <span className="text-muted-foreground">Draw</span>
-                      )}
-                    </TableCell>
+        <LoadingOverlay
+          loading={dashboard.matches.isRefreshing}
+          skeleton={<MatchesTableSkeletonCard />}
+        >
+          <Card className="border-border/80 shadow-none">
+            <CardHeader className="border-b border-border/70">
+              <CardTitle>Edition fixtures</CardTitle>
+              <CardDescription>
+                Click any row to move the route and open the selected fixture detail.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-4">
+              {dashboard.matches.errorMessage && dashboard.matches.data.length ? (
+                <Alert>
+                  <AlertTitle>Showing cached fixtures</AlertTitle>
+                  <AlertDescription>{dashboard.matches.errorMessage}</AlertDescription>
+                </Alert>
+              ) : null}
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Phase</TableHead>
+                    <TableHead>Match</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Venue</TableHead>
+                    <TableHead>Score</TableHead>
+                    <TableHead>Winner</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                </TableHeader>
+                <TableBody>
+                  {filteredMatches.map((match) => (
+                    <TableRow
+                      key={match.match_id}
+                      data-state={
+                        match.match_id === dashboard.selectedMatchId
+                          ? "selected"
+                          : undefined
+                      }
+                      className="cursor-pointer"
+                      onClick={() => dashboard.focusMatch(match.match_id)}
+                    >
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div>{match.phase_name}</div>
+                          {match.group_letter ? (
+                            <SemanticBadge tone="neutral">
+                              Group {match.group_letter}
+                            </SemanticBadge>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium text-foreground">
+                        {formatMatchLabel(match)}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatKickoffDate(match.kickoff_at)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div>{match.stadium_name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {match.host_city_name}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="font-heading text-lg font-semibold tabular-nums text-foreground">
+                            {match.final_score}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {formatPenaltyLabel(match.penalty_score)}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {match.winner_team_name ? (
+                          <SemanticBadge tone="qualified">
+                            {match.winner_team_name}
+                          </SemanticBadge>
+                        ) : (
+                          <span className="text-muted-foreground">Draw</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </LoadingOverlay>
       )}
     </div>
   )

@@ -3,11 +3,13 @@
 import * as React from "react"
 
 import {
+  CardListSkeleton,
+  LoadingOverlay,
   PanelEmptyState,
   PanelErrorState,
   PanelFilteredEmptyState,
-  PanelLoadingState,
   SemanticBadge,
+  TableSkeleton,
 } from "@/components/home/panel-states"
 import { SectionHeading } from "@/components/home/section-heading"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -32,6 +34,32 @@ import { formatNumber } from "@/lib/world-cup/format"
 import type { useWorldCupDashboard } from "@/hooks/use-world-cup-dashboard"
 
 type DashboardState = ReturnType<typeof useWorldCupDashboard>
+
+function TopScorersSkeleton() {
+  return (
+    <div className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
+      <Card className="border-border/80 shadow-none">
+        <CardHeader className="border-b border-border/70">
+          <CardTitle>Ranking leader</CardTitle>
+          <CardDescription>Loading the current scoring reference.</CardDescription>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <CardListSkeleton cards={3} />
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/80 shadow-none">
+        <CardHeader className="border-b border-border/70">
+          <CardTitle>Scoring table</CardTitle>
+          <CardDescription>Loading the SQL-backed scorer ranking.</CardDescription>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <TableSkeleton rows={6} columns={5} />
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
 
 export function TopScorersSection({ dashboard }: { dashboard: DashboardState }) {
   const [searchValue, setSearchValue] = React.useState("")
@@ -68,7 +96,7 @@ export function TopScorersSection({ dashboard }: { dashboard: DashboardState }) 
       />
 
       {dashboard.topScorers.isLoading ? (
-        <PanelLoadingState rows={6} />
+        <TopScorersSkeleton />
       ) : dashboard.topScorers.isError && !dashboard.topScorers.data.length ? (
         <PanelErrorState
           title="Unable to load top scorers"
@@ -89,7 +117,10 @@ export function TopScorersSection({ dashboard }: { dashboard: DashboardState }) 
           description="Adjust the player or team search to recover ranking rows."
         />
       ) : (
-        <>
+        <LoadingOverlay
+          loading={dashboard.topScorers.isRefreshing}
+          skeleton={<TopScorersSkeleton />}
+        >
           <div className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
             <Card className="border-border/80 shadow-none">
               <CardHeader className="border-b border-border/70">
@@ -189,7 +220,7 @@ export function TopScorersSection({ dashboard }: { dashboard: DashboardState }) 
               </CardContent>
             </Card>
           </div>
-        </>
+        </LoadingOverlay>
       )}
     </div>
   )

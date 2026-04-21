@@ -16,6 +16,7 @@ type AsyncResourceState<TData> = {
   data: TData
   errorMessage: string | null
   hasFetched: boolean
+  keySignature: string | null
 }
 
 export function useAsyncResource<TData>({
@@ -33,6 +34,7 @@ export function useAsyncResource<TData>({
     data: stableInitialData,
     errorMessage: null,
     hasFetched: false,
+    keySignature: enabled ? keySignature : null,
   })
 
   const reload = React.useCallback(() => {
@@ -54,7 +56,14 @@ export function useAsyncResource<TData>({
       setState((previous) => ({
         ...previous,
         status: "loading",
+        data:
+          previous.keySignature !== keySignature
+            ? stableInitialData
+            : previous.data,
         errorMessage: null,
+        hasFetched:
+          previous.keySignature !== keySignature ? false : previous.hasFetched,
+        keySignature,
       }))
     })
 
@@ -65,6 +74,7 @@ export function useAsyncResource<TData>({
           data,
           errorMessage: null,
           hasFetched: true,
+          keySignature,
         })
       })
       .catch((error: unknown) => {
@@ -79,9 +89,14 @@ export function useAsyncResource<TData>({
 
         setState((previous) => ({
           status: "error",
-          data: previous.hasFetched ? previous.data : stableInitialData,
+          data:
+            previous.keySignature === keySignature && previous.hasFetched
+              ? previous.data
+              : stableInitialData,
           errorMessage,
-          hasFetched: previous.hasFetched,
+          hasFetched:
+            previous.keySignature === keySignature ? previous.hasFetched : false,
+          keySignature,
         }))
       })
 
@@ -90,14 +105,24 @@ export function useAsyncResource<TData>({
     }
   }, [enabled, keySignature, reloadToken, stableInitialData])
 
-  const effectiveState = enabled
-    ? state
-    : {
-        status: "idle" as const,
-        data: stableInitialData,
-        errorMessage: null,
-        hasFetched: false,
-      }
+  const effectiveState =
+    !enabled
+      ? {
+          status: "idle" as const,
+          data: stableInitialData,
+          errorMessage: null,
+          hasFetched: false,
+          keySignature: null,
+        }
+      : state.keySignature === keySignature
+        ? state
+        : {
+            status: "loading" as const,
+            data: stableInitialData,
+            errorMessage: null,
+            hasFetched: false,
+            keySignature,
+          }
 
   return {
     ...effectiveState,

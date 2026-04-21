@@ -1,6 +1,7 @@
 import type { SqlDraft } from "@/lib/sql-assistant/types"
 
 type StructuredPayload = {
+  assistantMessage?: unknown
   sql?: unknown
   clarification?: unknown
   warnings?: unknown
@@ -22,6 +23,10 @@ function clampConfidence(value: unknown) {
   }
 
   return value
+}
+
+function normalizeOptionalText(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null
 }
 
 export function stripCodeFences(value: string) {
@@ -127,12 +132,8 @@ export function normalizeSqlForExecution(sql: string): NormalizedSqlResult {
 export function parseSqlDraftFromModelResponse(rawResponse: string): SqlDraft {
   const structuredPayload = tryParseStructuredPayload(rawResponse)
   const warnings = normalizeWarnings(structuredPayload?.warnings)
-  const clarification =
-    typeof structuredPayload?.clarification === "string" &&
-    structuredPayload.clarification.trim().length > 0
-      ? structuredPayload.clarification.trim()
-      : null
-
+  const clarification = normalizeOptionalText(structuredPayload?.clarification)
+  const assistantMessage = normalizeOptionalText(structuredPayload?.assistantMessage)
   const generatedSql =
     typeof structuredPayload?.sql === "string" &&
     structuredPayload.sql.trim().length > 0
@@ -156,6 +157,7 @@ export function parseSqlDraftFromModelResponse(rawResponse: string): SqlDraft {
 
   return {
     rawResponse,
+    assistantMessage,
     generatedSql,
     previewSql,
     normalizedSql: normalized.normalizedSql,

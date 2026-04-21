@@ -2,20 +2,26 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { ChevronLeft } from "lucide-react"
 
 import { HomeCommandCenter } from "@/components/home/command-center"
 import { DatabaseSection } from "@/components/home/database-section"
+import {
+  GroupDetailView,
+  MatchDetailView,
+  TeamDetailView,
+} from "@/components/home/detail-views"
 import { homeSectionMap, homeSections } from "@/components/home/home-config"
 import { GroupsSection } from "@/components/home/groups-section"
 import { HistorySection } from "@/components/home/history-section"
-import { InspectorPanel } from "@/components/home/inspector-panel"
 import { KnockoutSection } from "@/components/home/knockout-section"
 import { MatchesSection } from "@/components/home/matches-section"
+import { NaturalQueryDrawer } from "@/components/natural-query/natural-query-drawer"
 import { OverviewSection } from "@/components/home/overview-section"
 import { TeamsSection } from "@/components/home/teams-section"
 import { ThemeToggle } from "@/components/home/theme-toggle"
 import { TopScorersSection } from "@/components/home/top-scorers-section"
-import { NaturalQueryPanel } from "@/components/natural-query/natural-query-panel"
+import { BadgeSkeleton } from "@/components/home/panel-states"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -24,6 +30,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
+import { Button } from "@/components/ui/button"
 import {
   Sidebar,
   SidebarContent,
@@ -39,27 +46,48 @@ import {
   SidebarRail,
   SidebarProvider,
 } from "@/components/ui/sidebar"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useWorldCupDashboard } from "@/hooks/use-world-cup-dashboard"
 import { buildDashboardHref } from "@/lib/home-routing"
 import { formatMatchLabel } from "@/lib/world-cup/format"
 
-function getSectionBadgeCount(
+function getSectionBadgeState(
   dashboard: ReturnType<typeof useWorldCupDashboard>,
   section: keyof typeof homeSectionMap
 ) {
   switch (section) {
     case "teams":
-      return dashboard.teams.data.length
+      return {
+        count: dashboard.teams.data.length,
+        isLoading: dashboard.teams.isLoading || dashboard.teams.isRefreshing,
+      }
     case "groups":
-      return dashboard.groupedGroups.length
+      return {
+        count: dashboard.groupedGroups.length,
+        isLoading: dashboard.groups.isLoading || dashboard.groups.isRefreshing,
+      }
     case "matches":
-      return dashboard.matches.data.length
+      return {
+        count: dashboard.matches.data.length,
+        isLoading: dashboard.matches.isLoading || dashboard.matches.isRefreshing,
+      }
     case "knockout":
-      return dashboard.knockout.data.length
+      return {
+        count: dashboard.knockout.data.length,
+        isLoading: dashboard.knockout.isLoading || dashboard.knockout.isRefreshing,
+      }
     case "top-scorers":
-      return dashboard.topScorers.data.length
+      return {
+        count: dashboard.topScorers.data.length,
+        isLoading:
+          dashboard.topScorers.isLoading || dashboard.topScorers.isRefreshing,
+      }
     case "history":
-      return dashboard.teamHistory.data.length
+      return {
+        count: dashboard.teamHistory.data.length,
+        isLoading:
+          dashboard.teamHistory.isLoading || dashboard.teamHistory.isRefreshing,
+      }
     default:
       return null
   }
@@ -68,32 +96,91 @@ function getSectionBadgeCount(
 export function DashboardShell() {
   const dashboard = useWorldCupDashboard()
   const activeSection = homeSectionMap[dashboard.activeSection]
+  const sectionIndexHref = React.useMemo(
+    () =>
+      buildDashboardHref({
+        section: dashboard.activeSection,
+        editionId: dashboard.selectedEditionId,
+      }),
+    [dashboard.activeSection, dashboard.selectedEditionId]
+  )
+  const isCommandCatalogLoading =
+    dashboard.editions.isLoading ||
+    dashboard.teams.isLoading ||
+    dashboard.groups.isLoading ||
+    dashboard.matches.isLoading
+  const isCommandCatalogRefreshing =
+    dashboard.editions.isRefreshing ||
+    dashboard.teams.isRefreshing ||
+    dashboard.groups.isRefreshing ||
+    dashboard.matches.isRefreshing
   const activeDetailLabel = React.useMemo(() => {
+    if (!dashboard.isDetailRoute) {
+      return null
+    }
+
     switch (dashboard.activeSection) {
       case "teams":
-      case "top-scorers":
       case "history":
-        return (
-          dashboard.selectedTeam?.team_name ??
-          dashboard.teamHistory.data.at(0)?.team_name ??
-          null
-        )
+        return dashboard.selectedTeam?.team_name ?? `Team ${dashboard.routeDetailId}`
       case "groups":
         return dashboard.selectedGroup
           ? `Group ${dashboard.selectedGroup.group_letter}`
-          : null
+          : `Group ${dashboard.routeDetailId}`
       case "matches":
       case "knockout":
-        return dashboard.selectedMatch ? formatMatchLabel(dashboard.selectedMatch) : null
+        return dashboard.selectedMatch
+          ? formatMatchLabel(dashboard.selectedMatch)
+          : `Match ${dashboard.routeDetailId}`
       default:
         return null
     }
   }, [
     dashboard.activeSection,
+    dashboard.isDetailRoute,
+    dashboard.routeDetailId,
     dashboard.selectedGroup,
     dashboard.selectedMatch,
     dashboard.selectedTeam,
-    dashboard.teamHistory.data,
+  ])
+  const isActiveDetailLoading = React.useMemo(() => {
+    if (!dashboard.isDetailRoute) {
+      return false
+    }
+
+    switch (dashboard.activeSection) {
+      case "teams":
+      case "history":
+        return (
+          dashboard.selectedTeam === null &&
+          (dashboard.teams.isLoading || dashboard.teams.isRefreshing)
+        )
+      case "groups":
+        return (
+          dashboard.selectedGroup === null &&
+          (dashboard.groups.isLoading || dashboard.groups.isRefreshing)
+        )
+      case "matches":
+      case "knockout":
+        return (
+          dashboard.selectedMatch === null &&
+          (dashboard.matches.isLoading || dashboard.matches.isRefreshing)
+        )
+      default:
+        return false
+    }
+  }, [
+    dashboard.activeSection,
+    dashboard.groups.isLoading,
+    dashboard.groups.isRefreshing,
+    dashboard.isDetailRoute,
+    dashboard.matches.isLoading,
+    dashboard.matches.isRefreshing,
+    dashboard.selectedGroup,
+    dashboard.selectedMatch,
+    dashboard.selectedTeam,
+    dashboard.teams.isLoading,
+    dashboard.teams.isRefreshing,
   ])
 
   return (
@@ -110,6 +197,8 @@ export function DashboardShell() {
         teams={dashboard.teams.data}
         groups={dashboard.groupedGroups}
         matches={dashboard.matches.data}
+        isCatalogLoading={isCommandCatalogLoading}
+        isCatalogRefreshing={isCommandCatalogRefreshing}
         onSelectEdition={dashboard.focusEdition}
         onSelectSection={dashboard.focusSection}
         onSelectTeam={(teamId) => dashboard.focusTeam(teamId, "teams")}
@@ -140,7 +229,7 @@ export function DashboardShell() {
               <SidebarMenu>
                 {homeSections.map((section) => {
                   const Icon = section.icon
-                  const badgeCount = getSectionBadgeCount(dashboard, section.id)
+                  const badgeState = getSectionBadgeState(dashboard, section.id)
                   const href = buildDashboardHref({
                     section: section.id,
                     editionId: dashboard.selectedEditionId,
@@ -158,8 +247,14 @@ export function DashboardShell() {
                           <span>{section.label}</span>
                         </Link>
                       </SidebarMenuButton>
-                      {badgeCount !== null ? (
-                        <SidebarMenuBadge>{badgeCount}</SidebarMenuBadge>
+                      {badgeState !== null ? (
+                        <SidebarMenuBadge>
+                          {badgeState.isLoading ? (
+                            <BadgeSkeleton className="h-4 w-8 rounded-md" />
+                          ) : (
+                            badgeState.count
+                          )}
+                        </SidebarMenuBadge>
                       ) : null}
                     </SidebarMenuItem>
                   )
@@ -176,56 +271,84 @@ export function DashboardShell() {
           <header className="sticky top-0 z-20 px-4 pt-4 lg:px-6">
             <div className="flex min-h-16 flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card px-4 py-3 lg:px-6">
               <div className="min-w-0">
-                <Breadcrumb>
-                  <BreadcrumbList>
-                    <BreadcrumbItem>
-                      <BreadcrumbLink asChild>
-                        <Link
-                          href={buildDashboardHref({
-                            section: "overview",
-                            editionId: dashboard.selectedEditionId,
-                          })}
-                        >
-                          World Cup Ops
-                        </Link>
-                      </BreadcrumbLink>
-                    </BreadcrumbItem>
-                    <BreadcrumbSeparator />
-                    {activeDetailLabel ? (
-                      <>
+                <div className="flex items-start gap-1">
+                  {dashboard.isDetailRoute ? (
+                    <Button
+                      asChild
+                      variant="ghost"
+                      size="icon"
+                      className="-ml-2 mt-[-0.125rem] size-8 shrink-0"
+                    >
+                      <Link
+                        href={sectionIndexHref}
+                        aria-label={`Back to ${activeSection.label}`}
+                      >
+                        <ChevronLeft className="size-4" />
+                      </Link>
+                    </Button>
+                  ) : null}
+                  <div className="min-w-0">
+                    <Breadcrumb>
+                      <BreadcrumbList>
                         <BreadcrumbItem>
                           <BreadcrumbLink asChild>
                             <Link
                               href={buildDashboardHref({
-                                section: dashboard.activeSection,
+                                section: "overview",
                                 editionId: dashboard.selectedEditionId,
                               })}
                             >
-                              {activeSection.shortLabel}
+                              World Cup Ops
                             </Link>
                           </BreadcrumbLink>
                         </BreadcrumbItem>
                         <BreadcrumbSeparator />
-                        <BreadcrumbItem>
-                          <BreadcrumbPage>{activeDetailLabel}</BreadcrumbPage>
-                        </BreadcrumbItem>
-                      </>
-                    ) : (
-                      <BreadcrumbItem>
-                        <BreadcrumbPage>{activeSection.shortLabel}</BreadcrumbPage>
-                      </BreadcrumbItem>
-                    )}
-                  </BreadcrumbList>
-                </Breadcrumb>
-                <div className="min-w-0">
-                  <h1 className="truncate font-heading text-xl font-semibold tracking-tight text-foreground">
-                    {activeDetailLabel ?? activeSection.label}
-                  </h1>
-                  {activeDetailLabel ? (
-                    <p className="truncate text-sm text-muted-foreground">
-                      {activeSection.label}
-                    </p>
-                  ) : null}
+                        {dashboard.isDetailRoute ? (
+                          <>
+                            <BreadcrumbItem>
+                              <BreadcrumbLink asChild>
+                                <Link href={sectionIndexHref}>
+                                  {activeSection.shortLabel}
+                                </Link>
+                              </BreadcrumbLink>
+                            </BreadcrumbItem>
+                            <BreadcrumbSeparator />
+                            <BreadcrumbItem>
+                              <BreadcrumbPage>
+                                {isActiveDetailLoading ? (
+                                  <Skeleton className="h-4 w-32" />
+                                ) : (
+                                  activeDetailLabel
+                                )}
+                              </BreadcrumbPage>
+                            </BreadcrumbItem>
+                          </>
+                        ) : (
+                          <BreadcrumbItem>
+                            <BreadcrumbPage>{activeSection.shortLabel}</BreadcrumbPage>
+                          </BreadcrumbItem>
+                        )}
+                      </BreadcrumbList>
+                    </Breadcrumb>
+                    <div className="min-w-0">
+                      {isActiveDetailLoading ? (
+                        <Skeleton className="h-7 w-56 max-w-full" />
+                      ) : (
+                        <h1 className="truncate font-heading text-xl font-semibold tracking-tight text-foreground">
+                          {activeDetailLabel ?? activeSection.label}
+                        </h1>
+                      )}
+                      {activeDetailLabel ? (
+                        isActiveDetailLoading ? (
+                          <Skeleton className="mt-2 h-4 w-28" />
+                        ) : (
+                          <p className="truncate text-sm text-muted-foreground">
+                            {activeSection.label}
+                          </p>
+                        )
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -236,58 +359,63 @@ export function DashboardShell() {
           </header>
 
           <div className="flex-1 px-4 py-6 lg:px-6 lg:py-8">
-            <div
-              className={
-                dashboard.activeSection === "database"
-                  ? "grid gap-4"
-                  : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]"
-              }
-            >
-              <div className="space-y-6">
-                {dashboard.activeSection === "database" ? (
-                  <DatabaseSection dashboard={dashboard} />
-                ) : null}
-                {dashboard.activeSection === "overview" ? (
-                  <OverviewSection dashboard={dashboard} />
-                ) : null}
-                {dashboard.activeSection === "teams" ? (
+            <div className="space-y-6">
+              {dashboard.activeSection === "database" ? (
+                <DatabaseSection dashboard={dashboard} />
+              ) : null}
+              {dashboard.activeSection === "overview" ? (
+                <OverviewSection dashboard={dashboard} />
+              ) : null}
+              {dashboard.activeSection === "teams" ? (
+                dashboard.isDetailRoute ? (
+                  <TeamDetailView dashboard={dashboard} initialTab="squad" />
+                ) : (
                   <TeamsSection dashboard={dashboard} />
-                ) : null}
-                {dashboard.activeSection === "groups" ? (
+                )
+              ) : null}
+              {dashboard.activeSection === "groups" ? (
+                dashboard.isDetailRoute ? (
+                  <GroupDetailView dashboard={dashboard} />
+                ) : (
                   <GroupsSection dashboard={dashboard} />
-                ) : null}
-                {dashboard.activeSection === "matches" ? (
+                )
+              ) : null}
+              {dashboard.activeSection === "matches" ? (
+                dashboard.isDetailRoute ? (
+                  <MatchDetailView dashboard={dashboard} />
+                ) : (
                   <MatchesSection dashboard={dashboard} />
-                ) : null}
-                {dashboard.activeSection === "knockout" ? (
+                )
+              ) : null}
+              {dashboard.activeSection === "knockout" ? (
+                dashboard.isDetailRoute ? (
+                  <MatchDetailView dashboard={dashboard} />
+                ) : (
                   <KnockoutSection dashboard={dashboard} />
-                ) : null}
-                {dashboard.activeSection === "top-scorers" ? (
-                  <TopScorersSection dashboard={dashboard} />
-                ) : null}
-                {dashboard.activeSection === "history" ? (
+                )
+              ) : null}
+              {dashboard.activeSection === "top-scorers" ? (
+                <TopScorersSection dashboard={dashboard} />
+              ) : null}
+              {dashboard.activeSection === "history" ? (
+                dashboard.isDetailRoute ? (
+                  <TeamDetailView dashboard={dashboard} initialTab="history" />
+                ) : (
                   <HistorySection dashboard={dashboard} />
-                ) : null}
-                {dashboard.activeSection === "natural-query" ? (
-                  <NaturalQueryPanel
-                    section={dashboard.activeSection}
-                    editionId={dashboard.selectedEditionId}
-                    editionYear={dashboard.selectedEdition?.edition_year ?? null}
-                    teamId={dashboard.selectedTeamId}
-                    matchId={dashboard.selectedMatchId}
-                    groupId={dashboard.selectedGroupId}
-                  />
-                ) : null}
-              </div>
-
-              {dashboard.activeSection !== "database" ? (
-                <div className="xl:sticky xl:top-[6.5rem] xl:self-start">
-                  <InspectorPanel dashboard={dashboard} />
-                </div>
+                )
               ) : null}
             </div>
           </div>
         </div>
+
+        <NaturalQueryDrawer
+          section={dashboard.activeSection}
+          editionId={dashboard.selectedEditionId}
+          editionYear={dashboard.selectedEdition?.edition_year ?? null}
+          teamId={dashboard.selectedTeamId}
+          matchId={dashboard.selectedMatchId}
+          groupId={dashboard.selectedGroupId}
+        />
       </SidebarInset>
     </SidebarProvider>
   )

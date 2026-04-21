@@ -9,7 +9,6 @@ const validSections = new Set<HomeSectionId>([
   "knockout",
   "top-scorers",
   "history",
-  "natural-query",
 ])
 
 function parsePositiveInteger(value: string | null | undefined) {

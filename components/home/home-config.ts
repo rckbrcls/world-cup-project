@@ -2,7 +2,6 @@ import type { LucideIcon } from "lucide-react"
 import {
   CalendarDays,
   Database,
-  FileCode2,
   GitBranch,
   History,
   LayoutDashboard,
@@ -77,13 +76,6 @@ export const homeSections: HomeSectionDefinition[] = [
     shortLabel: "History",
     description: "Contextual historical record for the selected team.",
     icon: History,
-  },
-  {
-    id: "natural-query",
-    label: "Natural Query",
-    shortLabel: "Query",
-    description: "",
-    icon: FileCode2,
   },
 ]
 

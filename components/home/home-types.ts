@@ -7,4 +7,3 @@ export type HomeSectionId =
   | "knockout"
   | "top-scorers"
   | "history"
-  | "natural-query"

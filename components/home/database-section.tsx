@@ -12,8 +12,10 @@ import {
 import { toast } from "sonner"
 
 import {
+  CardListSkeleton,
+  LoadingOverlay,
+  MetricGridSkeleton,
   PanelErrorState,
-  PanelLoadingState,
   SemanticBadge,
 } from "@/components/home/panel-states"
 import { SectionHeading } from "@/components/home/section-heading"
@@ -37,6 +39,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { formatNumber } from "@/lib/world-cup/format"
 import type { useWorldCupDashboard } from "@/hooks/use-world-cup-dashboard"
 
@@ -113,6 +116,46 @@ function DatabaseActionCard({
   )
 }
 
+function DatabaseWorkspaceSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 xl:grid-cols-2">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <Card key={index} className="border-border/80 shadow-none">
+            <CardHeader className="border-b border-border/70">
+              <div className="flex items-center gap-2">
+                <Skeleton className="size-9 rounded-lg" />
+                <div className="space-y-2">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-4 w-56" />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <Skeleton className="h-10 w-40" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <MetricGridSkeleton count={5} className="xl:grid-cols-5" />
+
+      <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+        <Card className="border-border/80 shadow-none">
+          <CardContent className="space-y-3 pt-4">
+            <CardListSkeleton cards={4} />
+          </CardContent>
+        </Card>
+        <Card className="border-border/80 shadow-none">
+          <CardContent className="space-y-3 pt-4">
+            <CardListSkeleton cards={6} />
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
 export function DatabaseSection({ dashboard }: { dashboard: DashboardState }) {
   const [isRemoveDialogOpen, setIsRemoveDialogOpen] = React.useState(false)
   const status = dashboard.databaseStatus.data
@@ -185,7 +228,7 @@ export function DatabaseSection({ dashboard }: { dashboard: DashboardState }) {
           title="Database Workspace"
           description="Initialize schema objects, reapply query artifacts, and manage the canonical synthetic batch from one dedicated workspace."
         />
-        <PanelLoadingState rows={6} />
+        <DatabaseWorkspaceSkeleton />
       </div>
     )
   }
@@ -211,262 +254,267 @@ export function DatabaseSection({ dashboard }: { dashboard: DashboardState }) {
   }
 
   return (
-    <div className="space-y-6">
-      <SectionHeading
-        eyebrow="Operations"
-        title="Database Workspace"
-        description="Initialize schema objects, reapply query artifacts, and manage the canonical synthetic batch from one dedicated workspace."
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <SemanticBadge tone={status?.schema_exists ? "success" : "warning"}>
-              {status?.schema_exists ? "Schema ready" : "Schema missing"}
-            </SemanticBadge>
-            <SemanticBadge
-              tone={status?.reporting_layer_ready ? "success" : "warning"}
-            >
-              {status?.reporting_layer_ready
-                ? "Query layer ready"
-                : "Query layer pending"}
-            </SemanticBadge>
-            <SemanticBadge
-              tone={status?.has_active_batch ? "qualified" : "neutral"}
-            >
-              {status?.has_active_batch ? "Synthetic batch active" : "No active batch"}
-            </SemanticBadge>
-          </div>
-        }
-      />
-
-      {status?.inspection_warning || dashboard.databaseStatus.errorMessage ? (
-        <Alert>
-          <ShieldAlert />
-          <AlertTitle>Database status warning</AlertTitle>
-          <AlertDescription>
-            {status?.inspection_warning ?? dashboard.databaseStatus.errorMessage}
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      {dashboard.databaseMutation.errorMessage ? (
-        <Alert>
-          <ShieldAlert />
-          <AlertTitle>Last database operation failed</AlertTitle>
-          <AlertDescription>
-            {dashboard.databaseMutation.errorMessage}
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <DatabaseActionCard
-          title="Initialize database"
-          description="Apply `sql/ddl.sql` and `sql/queries.sql` in one backend session."
-          actionLabel="Initialize database"
-          icon={Wrench}
-          disabled={isMutating || Boolean(status?.schema_exists)}
-          isPending={isMutating && dashboard.databaseMutation.action === "initialize"}
-          onClick={handleInitialize}
-        />
-
-        <DatabaseActionCard
-          title="Apply reporting queries"
-          description="Reapply `sql/queries.sql` after schema changes or partial setup."
-          actionLabel="Apply reporting queries"
-          icon={FileCode2}
-          variant="outline"
-          disabled={isMutating || !status?.schema_exists}
-          isPending={isMutating && dashboard.databaseMutation.action === "reporting"}
-          onClick={handleApplyReporting}
-        />
-
-        <DatabaseActionCard
-          title="Populate synthetic data"
-          description="Seed the canonical SQL-backed sample dataset for editions, groups, matches, and events."
-          actionLabel="Populate synthetic data"
-          icon={Database}
-          disabled={isMutating || !status?.seed_functions_ready}
-          isPending={isMutating && dashboard.databaseMutation.action === "populate"}
-          onClick={handlePopulate}
-        />
-
-        <Card className="border-border/80 shadow-none">
-          <CardHeader className="border-b border-border/70">
-            <div className="flex items-center gap-2">
-              <div className="rounded-lg border border-border/80 bg-muted/30 p-2 text-muted-foreground">
-                <Trash2 className="size-4" />
-              </div>
-              <div>
-                <CardTitle className="text-base">Remove synthetic data</CardTitle>
-                <CardDescription>
-                  Clean only the rows tracked in the active synthetic batch.
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-4">
-            <AlertDialog
-              open={isRemoveDialogOpen}
-              onOpenChange={setIsRemoveDialogOpen}
-            >
-              <Button
-                variant="destructive"
-                disabled={isMutating || !status?.has_active_batch}
-                onClick={() => setIsRemoveDialogOpen(true)}
+    <LoadingOverlay
+      loading={dashboard.databaseStatus.isRefreshing}
+      skeleton={<DatabaseWorkspaceSkeleton />}
+    >
+      <div className="space-y-6">
+        <SectionHeading
+          eyebrow="Operations"
+          title="Database Workspace"
+          description="Initialize schema objects, reapply query artifacts, and manage the canonical synthetic batch from one dedicated workspace."
+          actions={
+            <div className="flex flex-wrap gap-2">
+              <SemanticBadge tone={status?.schema_exists ? "success" : "warning"}>
+                {status?.schema_exists ? "Schema ready" : "Schema missing"}
+              </SemanticBadge>
+              <SemanticBadge
+                tone={status?.reporting_layer_ready ? "success" : "warning"}
               >
-                {isMutating && dashboard.databaseMutation.action === "cleanup" ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <Trash2 />
-                )}
-                Remove synthetic data
-              </Button>
+                {status?.reporting_layer_ready
+                  ? "Query layer ready"
+                  : "Query layer pending"}
+              </SemanticBadge>
+              <SemanticBadge
+                tone={status?.has_active_batch ? "qualified" : "neutral"}
+              >
+                {status?.has_active_batch ? "Synthetic batch active" : "No active batch"}
+              </SemanticBadge>
+            </div>
+          }
+        />
 
-              <AlertDialogContent size="default">
-                <AlertDialogHeader>
-                  <AlertDialogMedia>
-                    <ShieldAlert className="size-5" />
-                  </AlertDialogMedia>
-                  <AlertDialogTitle>Remove synthetic dataset?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This operation removes only the tracked synthetic batch and
-                    keeps the database schema in place.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel disabled={isMutating}>
-                    Cancel
-                  </AlertDialogCancel>
-                  <AlertDialogAction
-                    variant="destructive"
-                    disabled={isMutating}
-                    onClick={handleRemove}
-                  >
-                    Confirm removal
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </CardContent>
-        </Card>
-      </div>
+        {status?.inspection_warning || dashboard.databaseStatus.errorMessage ? (
+          <Alert>
+            <ShieldAlert />
+            <AlertTitle>Database status warning</AlertTitle>
+            <AlertDescription>
+              {status?.inspection_warning ?? dashboard.databaseStatus.errorMessage}
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-3">
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Active batch
-          </p>
-          <p className="mt-1 font-heading text-2xl font-semibold tracking-tight text-foreground">
-            {status?.active_batch_id ?? "None"}
-          </p>
-        </div>
+        {dashboard.databaseMutation.errorMessage ? (
+          <Alert>
+            <ShieldAlert />
+            <AlertTitle>Last database operation failed</AlertTitle>
+            <AlertDescription>
+              {dashboard.databaseMutation.errorMessage}
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
-        <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-3">
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Editions
-          </p>
-          <p className="mt-1 font-heading text-2xl font-semibold tracking-tight text-foreground">
-            {formatNumber(status?.edition_count ?? 0)}
-          </p>
-        </div>
+        <div className="grid gap-4 xl:grid-cols-2">
+          <DatabaseActionCard
+            title="Initialize database"
+            description="Apply `sql/ddl.sql` and `sql/queries.sql` in one backend session."
+            actionLabel="Initialize database"
+            icon={Wrench}
+            disabled={isMutating || Boolean(status?.schema_exists)}
+            isPending={isMutating && dashboard.databaseMutation.action === "initialize"}
+            onClick={handleInitialize}
+          />
 
-        <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-3">
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Teams
-          </p>
-          <p className="mt-1 font-heading text-2xl font-semibold tracking-tight text-foreground">
-            {formatNumber(status?.team_count ?? 0)}
-          </p>
-        </div>
+          <DatabaseActionCard
+            title="Apply reporting queries"
+            description="Reapply `sql/queries.sql` after schema changes or partial setup."
+            actionLabel="Apply reporting queries"
+            icon={FileCode2}
+            variant="outline"
+            disabled={isMutating || !status?.schema_exists}
+            isPending={isMutating && dashboard.databaseMutation.action === "reporting"}
+            onClick={handleApplyReporting}
+          />
 
-        <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-3">
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Matches
-          </p>
-          <p className="mt-1 font-heading text-2xl font-semibold tracking-tight text-foreground">
-            {formatNumber(status?.match_count ?? 0)}
-          </p>
-        </div>
+          <DatabaseActionCard
+            title="Populate synthetic data"
+            description="Seed the canonical SQL-backed sample dataset for editions, groups, matches, and events."
+            actionLabel="Populate synthetic data"
+            icon={Database}
+            disabled={isMutating || !status?.seed_functions_ready}
+            isPending={isMutating && dashboard.databaseMutation.action === "populate"}
+            onClick={handlePopulate}
+          />
 
-        <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-3">
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Tracked rows
-          </p>
-          <p className="mt-1 font-heading text-2xl font-semibold tracking-tight text-foreground">
-            {formatNumber(status?.total_rows ?? 0)}
-          </p>
-        </div>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="space-y-3">
-          <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4">
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Dataset key
-            </p>
-            <p className="mt-1 font-medium text-foreground">
-              {status?.dataset_key ?? "Not seeded"}
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4">
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Edition years
-            </p>
-            <p className="mt-1 font-medium text-foreground">
-              {status?.edition_years.length
-                ? status.edition_years.join(", ")
-                : "None"}
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4">
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Created at
-            </p>
-            <p className="mt-1 font-medium text-foreground">
-              {formatSyntheticTimestamp(status?.created_at ?? null)}
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4">
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Last cleanup
-            </p>
-            <p className="mt-1 font-medium text-foreground">
-              {formatSyntheticTimestamp(status?.cleaned_at ?? null)}
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-foreground">Tracked row counts</p>
-            <SemanticBadge tone="neutral">{tableCounts.length} tables</SemanticBadge>
-          </div>
-
-          {tableCounts.length ? (
-            <div className="grid gap-2 sm:grid-cols-2">
-              {tableCounts.map(([tableName, rowCount]) => (
-                <div
-                  key={tableName}
-                  className="rounded-lg border border-border/70 bg-muted/20 px-3 py-3"
-                >
-                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                    {formatTableLabel(tableName)}
-                  </p>
-                  <p className="mt-1 font-heading text-2xl font-semibold tracking-tight text-foreground">
-                    {formatNumber(rowCount)}
-                  </p>
+          <Card className="border-border/80 shadow-none">
+            <CardHeader className="border-b border-border/70">
+              <div className="flex items-center gap-2">
+                <div className="rounded-lg border border-border/80 bg-muted/30 p-2 text-muted-foreground">
+                  <Trash2 className="size-4" />
                 </div>
-              ))}
+                <div>
+                  <CardTitle className="text-base">Remove synthetic data</CardTitle>
+                  <CardDescription>
+                    Clean only the rows tracked in the active synthetic batch.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <AlertDialog
+                open={isRemoveDialogOpen}
+                onOpenChange={setIsRemoveDialogOpen}
+              >
+                <Button
+                  variant="destructive"
+                  disabled={isMutating || !status?.has_active_batch}
+                  onClick={() => setIsRemoveDialogOpen(true)}
+                >
+                  {isMutating && dashboard.databaseMutation.action === "cleanup" ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <Trash2 />
+                  )}
+                  Remove synthetic data
+                </Button>
+
+                <AlertDialogContent size="default">
+                  <AlertDialogHeader>
+                    <AlertDialogMedia>
+                      <ShieldAlert className="size-5" />
+                    </AlertDialogMedia>
+                    <AlertDialogTitle>Remove synthetic dataset?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This operation removes only the tracked synthetic batch and
+                      keeps the database schema in place.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isMutating}>
+                      Cancel
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      variant="destructive"
+                      disabled={isMutating}
+                      onClick={handleRemove}
+                    >
+                      Confirm removal
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-3">
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Active batch
+            </p>
+            <p className="mt-1 font-heading text-2xl font-semibold tracking-tight text-foreground">
+              {status?.active_batch_id ?? "None"}
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-3">
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Editions
+            </p>
+            <p className="mt-1 font-heading text-2xl font-semibold tracking-tight text-foreground">
+              {formatNumber(status?.edition_count ?? 0)}
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-3">
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Teams
+            </p>
+            <p className="mt-1 font-heading text-2xl font-semibold tracking-tight text-foreground">
+              {formatNumber(status?.team_count ?? 0)}
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-3">
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Matches
+            </p>
+            <p className="mt-1 font-heading text-2xl font-semibold tracking-tight text-foreground">
+              {formatNumber(status?.match_count ?? 0)}
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-3">
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Tracked rows
+            </p>
+            <p className="mt-1 font-heading text-2xl font-semibold tracking-tight text-foreground">
+              {formatNumber(status?.total_rows ?? 0)}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+          <div className="space-y-3">
+            <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4">
+              <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Dataset key
+              </p>
+              <p className="mt-1 font-medium text-foreground">
+                {status?.dataset_key ?? "Not seeded"}
+              </p>
             </div>
-          ) : (
-            <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground">
-              No tracked synthetic rows are available yet.
+
+            <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4">
+              <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Edition years
+              </p>
+              <p className="mt-1 font-medium text-foreground">
+                {status?.edition_years.length
+                  ? status.edition_years.join(", ")
+                  : "None"}
+              </p>
             </div>
-          )}
+
+            <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4">
+              <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Created at
+              </p>
+              <p className="mt-1 font-medium text-foreground">
+                {formatSyntheticTimestamp(status?.created_at ?? null)}
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-4">
+              <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Last cleanup
+              </p>
+              <p className="mt-1 font-medium text-foreground">
+                {formatSyntheticTimestamp(status?.cleaned_at ?? null)}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-foreground">Tracked row counts</p>
+              <SemanticBadge tone="neutral">{tableCounts.length} tables</SemanticBadge>
+            </div>
+
+            {tableCounts.length ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {tableCounts.map(([tableName, rowCount]) => (
+                  <div
+                    key={tableName}
+                    className="rounded-lg border border-border/70 bg-muted/20 px-3 py-3"
+                  >
+                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                      {formatTableLabel(tableName)}
+                    </p>
+                    <p className="mt-1 font-heading text-2xl font-semibold tracking-tight text-foreground">
+                      {formatNumber(rowCount)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground">
+                No tracked synthetic rows are available yet.
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </LoadingOverlay>
   )
 }

@@ -48,6 +48,14 @@ export function useWorldCupDashboard() {
     [searchParams]
   )
   const activeSection = route.section
+  const routeDetailId = route.detailId
+  const isDetailRoute =
+    routeDetailId !== null &&
+    (activeSection === "teams" ||
+      activeSection === "history" ||
+      activeSection === "groups" ||
+      activeSection === "matches" ||
+      activeSection === "knockout")
 
   const health = useAsyncResource({
     key: ["health"],
@@ -128,17 +136,15 @@ export function useWorldCupDashboard() {
   )
 
   const selectedTeamId =
-    activeSection === "teams" ||
-    activeSection === "top-scorers" ||
-    activeSection === "history"
-      ? route.detailId
+    activeSection === "teams" || activeSection === "history"
+      ? routeDetailId
       : null
 
   const selectedTeam = React.useMemo(() => {
     return teams.data.find((team) => team.team_id === selectedTeamId) ?? null
   }, [selectedTeamId, teams.data])
 
-  const selectedGroupId = activeSection === "groups" ? route.detailId : null
+  const selectedGroupId = activeSection === "groups" ? routeDetailId : null
 
   const selectedGroup = React.useMemo(() => {
     return (
@@ -148,7 +154,7 @@ export function useWorldCupDashboard() {
 
   const selectedMatchId =
     activeSection === "matches" || activeSection === "knockout"
-      ? route.detailId
+      ? routeDetailId
       : null
 
   const selectedMatch = React.useMemo(() => {
@@ -365,6 +371,8 @@ export function useWorldCupDashboard() {
 
   return {
     activeSection,
+    isDetailRoute,
+    routeDetailId,
     setActiveSection: focusSection,
     isCommandOpen,
     setIsCommandOpen,
