@@ -31,6 +31,9 @@ export const metadata: Metadata = {
     shortcut: "/trophy.png",
     apple: "/trophy.png",
   },
+  other: {
+    google: "notranslate",
+  },
 }
 
 export default function RootLayout({
@@ -49,7 +52,7 @@ export default function RootLayout({
         fontMono.variable
       )}
     >
-      <body className="min-h-svh font-sans">
+      <body translate="no" className="min-h-svh font-sans">
         <ThemeProvider>
           <QueryProvider>
             <TooltipProvider>
