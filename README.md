@@ -1,72 +1,98 @@
-# Frontend Overview
+# World Cup Project
 
-This frontend is the current operational prototype for the World Cup project. It presents the SQL-backed dataset through focused sections and keeps Natural Query visible and reviewable instead of hiding SQL behind a chat-first shell.
+World Cup Project is a SQL-first FIFA World Cup management system built for a database systems course. The current repository state already includes the PostgreSQL domain model, a thin FastAPI backend, and a Next.js operational frontend. Formal course-deliverable packaging is still pending.
 
-## Frontend responsibilities
+## Current project state
 
-- show database readiness and lifecycle actions
-- let users initialize SQL objects and manage the synthetic sample dataset
-- browse editions, teams, groups, standings, matches, knockout, scorers, and history
-- expose Natural Query as a secondary workflow with visible SQL review
+- PostgreSQL is the source of truth for domain rules, integrity, standings, scorers, and controlled SQL validation.
+- FastAPI exposes prepared SQL artifacts and database lifecycle actions without reimplementing competition rules.
+- Next.js provides the current prototype workspace for browsing the dataset and using the Natural Query flow.
+- The repository is already usable as an application prototype, but the final academic packaging artifacts are not part of this slice yet.
 
-The frontend does not own competition rules. It consumes backend responses.
+## Repository structure
 
-## Lifecycle flow shown in the UI
+- `sql/ddl.sql`: schema, keys, constraints, trigger functions, triggers, and SQL-side integrity rules
+- `sql/synthetic_support.sql`: internal synthetic dataset support objects and lifecycle functions used by the app
+- `sql/dml.sql`: canonical data-loading entrypoint for the synthetic sample dataset
+- `sql/queries.sql`: SQL functions and views for the course queries
+- `sql/verification.sql`: manual verification queries and integrity scenarios
+- `app/`: thin FastAPI backend
+- `client/`: operational frontend workspace
 
-The `Database` workspace reflects the backend lifecycle:
+## SQL-first architecture
 
-1. `Initialize database`
-   - applies `sql/ddl.sql`
-   - applies `sql/synthetic_support.sql`
-   - applies `sql/queries.sql`
-2. `Populate synthetic data`
-   - loads the canonical sample dataset through the SQL synthetic-support functions
-3. `Apply reporting queries`
-   - reapplies the reporting layer when needed
-4. `Remove synthetic data`
-   - cleans only the active tracked synthetic batch
+The repository follows one clear rule: important business behavior belongs in PostgreSQL first.
 
-## Common local commands
+- Schema design, foreign keys, `CHECK` constraints, and triggers define integrity.
+- SQL functions and views define reporting behavior.
+- FastAPI mainly opens connections, applies SQL scripts, calls `world_cup.fn_*`, and translates errors.
+- The frontend consumes backend outputs instead of redefining competition rules in the browser.
 
-- `make dev-client`
+## Setup flows
+
+### App-managed setup
+
+Use the current prototype workflow when you want the backend to prepare the database lifecycle objects:
+
+1. Create the PostgreSQL database and configure the root `.env`.
+2. Start the backend and frontend.
+3. In the `Database` workspace, run `Initialize database`.
+
+Common local commands:
+
 - `make dev`
+- `make dev-server`
+- `make dev-client`
 
-## Main workspace sections
+That action applies:
 
-- `Database`
-- `Overview`
-- `Teams`
-- `Groups`
-- `Matches`
-- `Knockout`
-- `Top Scorers`
-- `History`
+1. `sql/ddl.sql`
+2. `sql/synthetic_support.sql`
+3. `sql/queries.sql`
 
-There is also a Natural Query drawer for AI-assisted SQL planning and controlled execution.
+After that, `Populate synthetic data` loads the canonical sample dataset through `sql/dml.sql` semantics by calling `world_cup.fn_seed_synthetic_data()`.
 
-## Data flow
+### Manual SQL-first setup
 
-### Structured data
+Use this order if you want to prepare the database directly with SQL scripts:
 
-- browser calls `/api/world-cup/...`
-- the Next.js proxy forwards the request to FastAPI
-- FastAPI calls the SQL layer
+1. apply `sql/ddl.sql`
+2. apply `sql/synthetic_support.sql`
+3. apply `sql/queries.sql`
+4. apply `sql/dml.sql`
+5. optionally inspect `sql/verification.sql`
 
-### Natural Query
+`sql/dml.sql` is intentionally the data-loading entrypoint only. Structural synthetic-support objects live in `sql/synthetic_support.sql`.
 
-- the frontend checks provider status through the backend
-- the backend generates a SQL proposal
-- the proposal stays visible for review
-- execution happens only through the controlled backend path
+## Current prototype capabilities
 
-## Design stance
+The current backend + frontend prototype supports:
 
-- structured, domain-first navigation
-- dense operational views
-- theme-safe `shadcn/ui` primitives
-- SQL transparency in the AI-assisted flow
+- database status inspection
+- database initialization and query-layer reapplication
+- synthetic dataset population and cleanup
+- editions, teams, groups, standings, matches, knockout path, squads, events, top scorers, and team history
+- Natural Query planning and controlled read-only SQL execution through the backend
+
+Natural Query is secondary to the structured workflow. Generated SQL stays visible for review before execution.
+
+## Course alignment
+
+The repository already emphasizes the database-heavy parts of the course brief:
+
+- relational modeling
+- SQL-enforced business rules
+- trigger-based integrity
+- SQL-backed reporting for the required course queries
+
+What is still pending outside this slice:
+
+- ER and relational-diagram delivery artifacts
+- final course packaging files and zip structure
+- the final CLI/TUI-oriented academic prototype path, if the team decides to add it
 
 ## Notes
 
-- Read the root [README.md](/Users/erickpatrickbarcelos/codes/world-cup-project/README.md) for the full project summary.
-- Read [app/README.md](/Users/erickpatrickbarcelos/codes/world-cup-project/app/README.md) for backend details.
+- Read `sql/` first if you want the real source of truth.
+- Read [app/README.md](/Users/erickpatrickbarcelos/codes/world-cup-project/app/README.md) for backend lifecycle details.
+- Read [client/README.md](/Users/erickpatrickbarcelos/codes/world-cup-project/client/README.md) for frontend workflow details.
