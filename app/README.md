@@ -1,5 +1,8 @@
 # Backend Overview
 
+> **Status:** Active
+> This backend is currently maintained as the thin FastAPI layer for the World Cup project.
+
 The backend is a thin FastAPI layer that exposes the PostgreSQL model behind the World Cup project. It exists to wire HTTP requests to SQL artifacts and to operate the database lifecycle without moving core competition logic out of PostgreSQL.
 
 ## Backend responsibilities

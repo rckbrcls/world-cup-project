@@ -1,5 +1,8 @@
 # Frontend Overview
 
+> **Status:** Active
+> This frontend is currently maintained as the Next.js operational prototype for the World Cup project.
+
 This frontend is the current operational prototype for the World Cup project. It presents the SQL-backed dataset through focused sections and keeps Natural Query visible and reviewable instead of hiding SQL behind a chat-first shell.
 
 ## Frontend responsibilities

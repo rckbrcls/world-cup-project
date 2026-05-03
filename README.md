@@ -1,6 +1,20 @@
 # World Cup Project
 
+> **Status:** Active
+> This academic database project is currently maintained as a SQL-first prototype and course deliverable workspace.
+
 World Cup Project is a SQL-first FIFA World Cup management system built for a database systems course. The current repository state already includes the PostgreSQL domain model, a thin FastAPI backend, and a Next.js operational frontend. Formal course-deliverable packaging is still pending.
+
+## Summary
+
+- [Current project state](#current-project-state)
+- [Goals](#goals)
+- [Repository structure](#repository-structure)
+- [SQL-first architecture](#sql-first-architecture)
+- [Setup flows](#setup-flows)
+- [Current prototype capabilities](#current-prototype-capabilities)
+- [Course alignment](#course-alignment)
+- [Notes](#notes)
 
 ## Current project state
 
@@ -73,6 +87,13 @@ The current backend + frontend prototype supports:
 - synthetic dataset population and cleanup
 - editions, teams, groups, standings, matches, knockout path, squads, events, top scorers, and team history
 - Natural Query planning and controlled read-only SQL execution through the backend
+
+## Goals
+
+- Demonstrate a database-first implementation of FIFA World Cup data and rules.
+- Keep PostgreSQL as the source of truth for integrity, reporting, and validation.
+- Provide a thin backend and operational frontend without duplicating business rules in application code.
+- Support academic evaluation through clear SQL artifacts, verification scripts, and documented workflows.
 
 Natural Query is secondary to the structured workflow. Generated SQL stays visible for review before execution.
 
