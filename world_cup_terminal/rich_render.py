@@ -7,8 +7,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from app.db import DatabaseConnectionParams
-from app.sql_assistant import NaturalQueryDraft, NaturalQueryProviderState
+from world_cup_core.db import DatabaseConnectionParams
+from world_cup_core.sql_assistant import NaturalQueryDraft, NaturalQueryProviderState
 from world_cup_terminal.models import QueryExecutionResult, SelectorOption
 
 console = Console()
@@ -30,12 +30,9 @@ def render_database_status(status: dict[str, Any]) -> Table:
     for key in (
         "schema_exists",
         "reporting_layer_ready",
-        "seed_functions_ready",
         "edition_count",
         "team_count",
         "match_count",
-        "has_active_batch",
-        "dataset_key",
         "inspection_warning",
     ):
         table.add_row(key, str(status.get(key)))

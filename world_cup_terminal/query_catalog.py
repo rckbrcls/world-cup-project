@@ -56,6 +56,7 @@ QUERY_DEFINITIONS = (
         description="Show the standings table for one selected group.",
         sql="SELECT * FROM world_cup.fn_group_standings(%s)",
         parameters=(EDITIONS, GROUP_IN_EDITION),
+        execution_parameters=("group_id",),
     ),
     QueryDefinition(
         key="edition-matches",
@@ -84,6 +85,7 @@ QUERY_DEFINITIONS = (
         description="List all events recorded for one match.",
         sql="SELECT * FROM world_cup.fn_list_match_events(%s)",
         parameters=(EDITIONS, MATCH_IN_EDITION),
+        execution_parameters=("match_id",),
     ),
     QueryDefinition(
         key="top-scorers",

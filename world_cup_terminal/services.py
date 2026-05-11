@@ -3,11 +3,11 @@ from __future__ import annotations
 from collections import OrderedDict
 from typing import Any
 
-from app.config import settings
-from app.db import DatabaseConnectionParams, get_default_connection_params
-from app.ollama_client import OllamaClient
-from app.repository import QueryRepository, repository
-from app.sql_assistant import (
+from world_cup_core.config import settings
+from world_cup_core.db import DatabaseConnectionParams, get_default_connection_params
+from world_cup_core.ollama_client import OllamaClient
+from world_cup_core.repository import QueryRepository, repository
+from world_cup_core.sql_assistant import (
     NaturalQueryDraft,
     NaturalQueryProviderState,
     NaturalQueryRepairContext,
