@@ -1,0 +1,52 @@
+<mxfile host="app.diagrams.net" modified="2026-05-11T00:00:00.000Z" agent="Codex" version="24.7.17" type="device">
+  <diagram id="world-cup-relational" name="Relational">
+    <mxGraphModel dx="1800" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="confederation" value="confederation&lt;br&gt;PK id&lt;br&gt;UQ code&lt;br&gt;UQ name" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="190" height="90" as="geometry"/></mxCell>
+        <mxCell id="country" value="country&lt;br&gt;PK id&lt;br&gt;UQ fifa_code&lt;br&gt;FK confederation_id NOT NULL" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="300" y="40" width="230" height="100" as="geometry"/></mxCell>
+        <mxCell id="team" value="team&lt;br&gt;PK id&lt;br&gt;UQ fifa_code&lt;br&gt;FK country_id NOT NULL UNIQUE" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="610" y="40" width="240" height="100" as="geometry"/></mxCell>
+        <mxCell id="coach" value="coach&lt;br&gt;PK id&lt;br&gt;full_name NOT NULL&lt;br&gt;FK country_id" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="930" y="40" width="210" height="90" as="geometry"/></mxCell>
+        <mxCell id="player" value="player&lt;br&gt;PK id&lt;br&gt;UQ full_name, birth_date&lt;br&gt;birth_date NOT NULL" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="1220" y="40" width="230" height="100" as="geometry"/></mxCell>
+        <mxCell id="referee" value="referee&lt;br&gt;PK id&lt;br&gt;UQ full_name, country_id&lt;br&gt;FK country_id" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="1510" y="40" width="230" height="100" as="geometry"/></mxCell>
+
+        <mxCell id="edition" value="world_cup_edition&lt;br&gt;PK id&lt;br&gt;UQ year&lt;br&gt;FK host_country_id NOT NULL&lt;br&gt;FK champion/runner_up/third_place" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="40" y="260" width="260" height="130" as="geometry"/></mxCell>
+        <mxCell id="host_city" value="host_city&lt;br&gt;PK id&lt;br&gt;UQ name, country_id&lt;br&gt;FK country_id NOT NULL" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1"><mxGeometry x="370" y="260" width="230" height="100" as="geometry"/></mxCell>
+        <mxCell id="stadium" value="stadium&lt;br&gt;PK id&lt;br&gt;UQ name, host_city_id&lt;br&gt;FK host_city_id NOT NULL&lt;br&gt;capacity &gt; 0" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1"><mxGeometry x="680" y="260" width="250" height="120" as="geometry"/></mxCell>
+        <mxCell id="edition_host_city" value="edition_host_city&lt;br&gt;PK edition_id, host_city_id&lt;br&gt;FK edition_id&lt;br&gt;FK host_city_id" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1"><mxGeometry x="1010" y="260" width="250" height="110" as="geometry"/></mxCell>
+        <mxCell id="competition_phase" value="competition_phase&lt;br&gt;PK id&lt;br&gt;UQ code&lt;br&gt;phase_kind NOT NULL&lt;br&gt;sort_order UNIQUE" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="1340" y="250" width="250" height="120" as="geometry"/></mxCell>
+        <mxCell id="edition_phase" value="edition_phase&lt;br&gt;PK id&lt;br&gt;UQ edition_id, phase_id&lt;br&gt;FK edition_id&lt;br&gt;FK phase_id" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="40" y="500" width="250" height="120" as="geometry"/></mxCell>
+        <mxCell id="team_group" value="team_group&lt;br&gt;PK id&lt;br&gt;UQ edition_id, group_letter&lt;br&gt;FK edition_id" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="360" y="500" width="250" height="100" as="geometry"/></mxCell>
+        <mxCell id="edition_team" value="edition_team&lt;br&gt;PK id&lt;br&gt;UQ edition_id, team_id&lt;br&gt;UQ edition_id, coach_id&lt;br&gt;FK edition_id/team_id/coach_id/group_id" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1"><mxGeometry x="690" y="480" width="280" height="140" as="geometry"/></mxCell>
+        <mxCell id="team_call_up" value="team_call_up&lt;br&gt;PK edition_id, team_id, player_id&lt;br&gt;UQ edition_id, player_id&lt;br&gt;UQ edition_id, team_id, shirt_number&lt;br&gt;FK edition_team and player" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1"><mxGeometry x="1050" y="480" width="300" height="140" as="geometry"/></mxCell>
+        <mxCell id="match_game" value="match_game&lt;br&gt;PK id&lt;br&gt;FK edition, phase, group, stadium&lt;br&gt;FK home_team, away_team, winner_team&lt;br&gt;distinct teams, score checks" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1"><mxGeometry x="40" y="760" width="310" height="150" as="geometry"/></mxCell>
+        <mxCell id="match_official" value="match_official&lt;br&gt;PK match_id, referee_id&lt;br&gt;UQ match_id, role&lt;br&gt;FK match_id&lt;br&gt;FK referee_id" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="430" y="780" width="260" height="120" as="geometry"/></mxCell>
+        <mxCell id="match_event" value="match_event&lt;br&gt;PK id&lt;br&gt;FK match_id&lt;br&gt;FK team_id&lt;br&gt;FK player_id / related_player_id&lt;br&gt;minute and event type checks" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1"><mxGeometry x="770" y="760" width="300" height="150" as="geometry"/></mxCell>
+
+        <mxCell id="r1" value="FK" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="country" target="confederation"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="r2" value="FK" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="team" target="country"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="r3" value="host FK" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="edition" target="country"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="r4" value="FK" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="host_city" target="country"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="r5" value="FK" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="stadium" target="host_city"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="r6" value="FKs" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="edition_host_city" target="edition"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="r7" value="FKs" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="edition_host_city" target="host_city"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="r8" value="FK" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="edition_phase" target="edition"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="r9" value="FK" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="edition_phase" target="competition_phase"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="r10" value="FK" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="team_group" target="edition"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="r11" value="FKs" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="edition_team" target="edition"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="r12" value="FKs" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="edition_team" target="team"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="r13" value="FKs" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="edition_team" target="coach"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="r14" value="FKs" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="edition_team" target="team_group"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="r15" value="FKs" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="team_call_up" target="edition_team"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="r16" value="FK" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="team_call_up" target="player"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="r17" value="FKs" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="match_game" target="edition_phase"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="r18" value="FKs" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="match_game" target="stadium"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="r19" value="FKs" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="match_official" target="match_game"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="r20" value="FK" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="match_official" target="referee"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="r21" value="FKs" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="match_event" target="match_game"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="r22" value="FKs" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="match_event" target="player"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

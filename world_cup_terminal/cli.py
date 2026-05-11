@@ -6,11 +6,11 @@ import typer
 from rich.panel import Panel
 from rich.prompt import IntPrompt, Prompt
 
-from app.db import DatabaseConnectionParams
-from app.repository import NaturalQueryExecutionError
-from app.sql_assistant import SqlPlanningHistory, WorkspaceContext
+from world_cup_core.db import DatabaseConnectionParams
+from world_cup_core.repository import NaturalQueryExecutionError
+from world_cup_core.sql_assistant import SqlPlanningHistory, WorkspaceContext
 from world_cup_terminal.models import QueryDefinition
-from world_cup_terminal.query_catalog import DEFAULT_QUERY_KEY, QUERY_CATALOG
+from world_cup_terminal.query_catalog import DEFAULT_QUERY_KEY, QUERY_CATALOG, QUERY_DEFINITIONS
 from world_cup_terminal.rich_render import (
     console,
     render_connection_summary,
@@ -21,10 +21,9 @@ from world_cup_terminal.rich_render import (
     render_selector_options,
 )
 from world_cup_terminal.services import WorldCupTerminalService
-from world_cup_terminal.tui import WorldCupTerminalApp
 
 app = typer.Typer(
-    help="Keyboard-first terminal workspace for the World Cup project.",
+    help="Command-line prototype for the World Cup database project.",
     no_args_is_help=False,
     add_completion=False,
 )
@@ -40,12 +39,55 @@ service = WorldCupTerminalService()
 @app.callback(invoke_without_command=True)
 def terminal_entrypoint(ctx: typer.Context) -> None:
     if ctx.invoked_subcommand is None:
-        launch_tui()
+        launch_menu()
 
 
-@app.command("tui")
-def launch_tui() -> None:
-    WorldCupTerminalApp(service=service).run()
+@app.command("menu")
+def launch_menu() -> None:
+    params = collect_connection_params(
+        host=None,
+        port=None,
+        database=None,
+        user=None,
+        password=None,
+    )
+    console.print(render_connection_summary(params))
+
+    while True:
+        console.print()
+        console.print("[bold]World Cup Database Prototype[/bold]")
+        console.print("0. Database status")
+        for index, definition in enumerate(QUERY_DEFINITIONS, start=1):
+            console.print(f"{index}. {definition.title}")
+        console.print("11. Natural-language query with local Ollama")
+        console.print("12. Execute approved SQL")
+        console.print("13. Quit")
+
+        selected = IntPrompt.ask("Choose an option", default=1)
+
+        if selected == 0:
+            status = service.get_database_status(params)
+            console.print(render_database_status(status))
+            continue
+
+        if 1 <= selected <= len(QUERY_DEFINITIONS):
+            definition = QUERY_DEFINITIONS[selected - 1]
+            run_definition_from_menu(params, definition)
+            continue
+
+        if selected == 11:
+            run_natural_query_from_menu(params)
+            continue
+
+        if selected == 12:
+            run_sql_from_menu(params)
+            continue
+
+        if selected == 13:
+            console.print("Goodbye.")
+            return
+
+        console.print(Panel("Invalid option.", title="Menu", border_style="red"))
 
 
 @app.command("status")
@@ -182,6 +224,89 @@ def execute_natural_query(
         raise typer.Exit(code=1) from exc
 
     console.print(render_connection_summary(params))
+    console.print(render_query_result("Controlled SQL Execution", result))
+
+
+def run_definition_from_menu(
+    params: DatabaseConnectionParams,
+    definition: QueryDefinition,
+) -> None:
+    try:
+        parameter_values = resolve_query_parameters(
+            params=params,
+            definition=definition,
+            provided_values={},
+        )
+        result = service.execute_mandatory_query(
+            connection_params=params,
+            definition=definition,
+            parameter_values=parameter_values,
+        )
+    except Exception as exc:
+        console.print(Panel(str(exc), title="Query Error", border_style="red"))
+        return
+
+    console.print(render_query_result(definition.title, result))
+
+
+def run_natural_query_from_menu(params: DatabaseConnectionParams) -> None:
+    user_prompt = Prompt.ask("Natural-language request").strip()
+    provider_state = asyncio.run(service.get_provider_state())
+    console.print(render_provider_state(provider_state))
+
+    if provider_state.status != "ready":
+        return
+
+    try:
+        draft = asyncio.run(
+            service.plan_natural_query(
+                prompt=user_prompt,
+                connection_params=params,
+                context=WorkspaceContext(section="terminal-menu"),
+                history=SqlPlanningHistory(),
+            )
+        )
+    except Exception as exc:
+        console.print(Panel(str(exc), title="Planning Error", border_style="red"))
+        return
+
+    for panel in render_draft(user_prompt, draft):
+        console.print(panel)
+
+    if not draft.is_executable or not draft.preview_sql:
+        return
+
+    approval = Prompt.ask("Execute this SQL?", choices=["yes", "no"], default="no")
+    if approval != "yes":
+        return
+
+    execute_sql_text(params=params, sql=draft.preview_sql)
+
+
+def run_sql_from_menu(params: DatabaseConnectionParams) -> None:
+    sql = Prompt.ask("Approved SQL").strip()
+    execute_sql_text(params=params, sql=sql)
+
+
+def execute_sql_text(*, params: DatabaseConnectionParams, sql: str) -> None:
+    try:
+        result = service.execute_natural_query(
+            sql=sql,
+            connection_params=params,
+        )
+    except NaturalQueryExecutionError as exc:
+        console.print(
+            Panel(
+                exc.detail or exc.message,
+                title=f"{exc.scope}: {exc.reason}",
+                border_style="red",
+            )
+        )
+        return
+    except Exception as exc:
+        console.print(Panel(str(exc), title="SQL Error", border_style="red"))
+        return
+
     console.print(render_query_result("Controlled SQL Execution", result))
 
 

@@ -6,7 +6,7 @@ from urllib.parse import unquote, urlparse
 import psycopg
 from psycopg.rows import dict_row
 
-from app.config import settings
+from world_cup_core.config import settings
 
 
 @dataclass(slots=True, frozen=True)

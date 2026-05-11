@@ -6,9 +6,9 @@ from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, Field
 
-from app.db import DatabaseConnectionParams
-from app.ollama_client import OllamaProviderStatus
-from app.repository import NaturalQueryExecutionError
+from world_cup_core.db import DatabaseConnectionParams
+from world_cup_core.ollama_client import OllamaProviderStatus
+from world_cup_core.repository import NaturalQueryExecutionError
 
 ValidationReason = Literal[
     "local-precheck",
@@ -255,7 +255,7 @@ def build_sql_planning_prompt(
             "- Do not reference aliases outside their valid SQL scope.",
             "- When aggregating the output of a function, use the exact returned columns from that function signature.",
             "- If the request needs an identifier that is missing from the current context, ask for clarification instead of guessing IDs.",
-            "- Resolve short follow-up requests by using the recent drawer history below before asking for clarification.",
+            "- Resolve short follow-up requests by using the recent terminal history below before asking for clarification.",
             "- Treat 'latest edition' or 'last edition' as the edition with the highest edition_year unless the operator explicitly says otherwise.",
             "- When an ID is missing but can be derived safely, use a nested SELECT against an approved reporting surface instead of guessing.",
             "- assistantMessage must briefly explain what the query is intended to retrieve for the operator.",
@@ -264,7 +264,7 @@ def build_sql_planning_prompt(
             "- confidence must be a number between 0 and 1.",
             "- Keep SQL inspectable and operational, not conversational.",
             "",
-            "Current dashboard context:",
+            "Current terminal context:",
             _format_context_line("section", context.section),
             _format_context_line("edition_id", context.edition_id),
             _format_context_line("edition_year", context.edition_year),
@@ -272,7 +272,7 @@ def build_sql_planning_prompt(
             _format_context_line("match_id", context.match_id),
             _format_context_line("group_id", context.group_id),
             "",
-            "Recent drawer history:",
+            "Recent terminal history:",
             _format_history_line("last_user_request", history.last_user_prompt),
             _format_history_line("last_assistant_message", history.last_assistant_message),
             _format_history_line(
@@ -320,7 +320,7 @@ def build_sql_repair_prompt(
             "Original operator request:",
             prompt.strip(),
             "",
-            "Current dashboard context:",
+            "Current terminal context:",
             _format_context_line("section", context.section),
             _format_context_line("edition_id", context.edition_id),
             _format_context_line("edition_year", context.edition_year),

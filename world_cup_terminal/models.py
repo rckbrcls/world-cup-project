@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from app.db import DatabaseConnectionParams
-from app.sql_assistant import NaturalQueryDraft, NaturalQueryProviderState, WorkspaceContext
+from world_cup_core.db import DatabaseConnectionParams
+from world_cup_core.sql_assistant import NaturalQueryDraft, NaturalQueryProviderState, WorkspaceContext
 
 ConnectionStatus = Literal["disconnected", "connecting", "connected", "error"]
 SelectorSource = Literal[
@@ -38,9 +38,13 @@ class QueryDefinition:
     description: str
     sql: str
     parameters: tuple[QueryParameterSpec, ...] = ()
+    execution_parameters: tuple[str, ...] | None = None
 
     def ordered_parameters(self, values: dict[str, int]) -> tuple[int, ...]:
-        return tuple(int(values[parameter.name]) for parameter in self.parameters)
+        parameter_names = self.execution_parameters or tuple(
+            parameter.name for parameter in self.parameters
+        )
+        return tuple(int(values[name]) for name in parameter_names)
 
 
 QueryCatalog = dict[str, QueryDefinition]

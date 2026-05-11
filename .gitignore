@@ -11,15 +11,5 @@ __pycache__/
 .venv/
 *.egg-info/
 
-# Node / Next.js
-node_modules/
-.pnpm-store/
-.next/
-out/
-build/
-coverage/
-*.tsbuildinfo
-next-env.d.ts
-
 # Logs
 *.log

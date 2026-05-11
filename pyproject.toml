@@ -1,18 +1,15 @@
 [project]
 name = "world-cup-project"
 version = "0.1.0"
-description = "SQL-first FIFA World Cup database project with a thin FastAPI layer."
+description = "SQL-first FIFA World Cup database project with a Python command-line prototype."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  "fastapi>=0.115.0,<1.0.0",
   "ollama>=0.6.1",
   "psycopg[binary]>=3.2.0,<4.0.0",
   "pydantic-settings>=2.6.0,<3.0.0",
   "rich>=13.9.0,<14.0.0",
-  "textual>=0.86.0,<1.0.0",
   "typer>=0.12.5,<1.0.0",
-  "uvicorn>=0.32.0,<1.0.0",
 ]
 
 [build-system]
@@ -23,4 +20,4 @@ build-backend = "setuptools.build_meta"
 world-cup-terminal = "world_cup_terminal.cli:app"
 
 [tool.setuptools.packages.find]
-include = ["app*", "world_cup_terminal*"]
+include = ["world_cup_core*", "world_cup_terminal*"]

@@ -2,15 +2,12 @@ from contextlib import suppress
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
-from pathlib import Path
 from typing import Any, TypedDict
 from uuid import UUID
 
 import psycopg
 
-from app.db import DatabaseConnectionParams, get_connection
-
-SQL_DIRECTORY = Path(__file__).resolve().parents[1] / "sql"
+from world_cup_core.db import DatabaseConnectionParams, get_connection
 
 
 class NaturalQueryExecutionResult(TypedDict):
@@ -55,139 +52,6 @@ class QueryRepository:
         try:
             with get_connection(connection_params) as connection:
                 return self._load_database_status(connection)
-        except psycopg.Error as exc:
-            raise RuntimeError(self._format_database_error(exc)) from exc
-
-    def initialize_database(
-        self,
-        connection_params: DatabaseConnectionParams | None = None,
-    ) -> dict[str, Any]:
-        try:
-            with get_connection(connection_params) as connection:
-                connection.autocommit = True
-                status_before = self._load_database_status(connection)
-
-                if self._database_core_ready(status_before):
-                    return self._build_database_operation_result(
-                        operation="initialize",
-                        status="already_initialized",
-                        message=(
-                            "The database schema, synthetic support layer, and reporting "
-                            "queries are already available."
-                        ),
-                        database_status=status_before,
-                    )
-
-                if not status_before["schema_exists"]:
-                    self._execute_sql_script(connection, "ddl.sql")
-
-                if not self._synthetic_support_ready(status_before):
-                    self._execute_sql_script(connection, "synthetic_support.sql")
-
-                if not status_before["reporting_layer_ready"]:
-                    self._execute_sql_script(connection, "queries.sql")
-
-                return self._build_database_operation_result(
-                    operation="initialize",
-                    status="initialized",
-                    message=(
-                        "Database schema, synthetic support objects, and reporting queries "
-                        "were applied for the current database state."
-                    ),
-                    database_status=self._load_database_status(connection),
-                )
-        except psycopg.Error as exc:
-            raise RuntimeError(self._format_database_error(exc)) from exc
-
-    def apply_reporting_queries(
-        self,
-        connection_params: DatabaseConnectionParams | None = None,
-    ) -> dict[str, Any]:
-        try:
-            with get_connection(connection_params) as connection:
-                connection.autocommit = True
-                status_before = self._load_database_status(connection)
-
-                if not status_before["schema_exists"]:
-                    raise RuntimeError(
-                        "Cannot apply reporting queries before the `world_cup` schema exists. "
-                        "Initialize the database first."
-                    )
-
-                self._execute_sql_script(connection, "queries.sql")
-
-                return self._build_database_operation_result(
-                    operation="apply_reporting",
-                    status="queries_applied",
-                    message="Reporting views and SQL functions were applied successfully.",
-                    database_status=self._load_database_status(connection),
-                )
-        except psycopg.Error as exc:
-            raise RuntimeError(self._format_database_error(exc)) from exc
-
-    def populate_database(
-        self,
-        connection_params: DatabaseConnectionParams | None = None,
-    ) -> dict[str, Any]:
-        try:
-            with get_connection(connection_params) as connection:
-                status_before = self._load_database_status(connection)
-
-                if not status_before["seed_functions_ready"]:
-                    raise RuntimeError(
-                        "Cannot populate synthetic data before the synthetic support "
-                        "functions are available. Run database initialization first."
-                    )
-
-                with connection.cursor() as cursor:
-                    cursor.execute("SELECT * FROM world_cup.fn_seed_synthetic_data()")
-                    operation_row = cursor.fetchone()
-
-                    if operation_row is None:
-                        raise RuntimeError(
-                            "Expected a single-row result from the synthetic seed function."
-                        )
-
-                connection.commit()
-
-                return {
-                    **self._load_database_status(connection),
-                    "operation": "populate",
-                    **operation_row,
-                }
-        except psycopg.Error as exc:
-            raise RuntimeError(self._format_database_error(exc)) from exc
-
-    def cleanup_database(
-        self,
-        connection_params: DatabaseConnectionParams | None = None,
-    ) -> dict[str, Any]:
-        try:
-            with get_connection(connection_params) as connection:
-                status_before = self._load_database_status(connection)
-
-                if not status_before["cleanup_function_ready"]:
-                    raise RuntimeError(
-                        "Cannot clean synthetic data before the synthetic support "
-                        "functions are available. Run database initialization first."
-                    )
-
-                with connection.cursor() as cursor:
-                    cursor.execute("SELECT * FROM world_cup.fn_cleanup_synthetic_data()")
-                    operation_row = cursor.fetchone()
-
-                    if operation_row is None:
-                        raise RuntimeError(
-                            "Expected a single-row result from the synthetic cleanup function."
-                        )
-
-                connection.commit()
-
-                return {
-                    **self._load_database_status(connection),
-                    "operation": "cleanup",
-                    **operation_row,
-                }
         except psycopg.Error as exc:
             raise RuntimeError(self._format_database_error(exc)) from exc
 
@@ -447,16 +311,14 @@ class QueryRepository:
             return (
                 "The `world_cup` schema is missing in the database selected by "
                 "`DATABASE_URL`. Apply `sql/ddl.sql` first. For a complete setup, "
-                "follow with `sql/synthetic_support.sql`, `sql/queries.sql`, and "
-                "only use `sql/dml.sql` if you want to pre-seed the synthetic dataset "
-                "outside the app."
+                "follow with `sql/queries.sql` and `sql/dml.sql`."
             )
 
         if exc.sqlstate == "42883" and "world_cup.fn_" in message:
             return (
                 "The required `world_cup` SQL functions are not available in the "
-                "current database. Apply `sql/ddl.sql`, then `sql/synthetic_support.sql`, "
-                "then `sql/queries.sql`, and retry the request."
+                "current database. Apply `sql/ddl.sql`, then `sql/queries.sql`, "
+                "then retry the request."
             )
 
         return message
@@ -468,9 +330,6 @@ class QueryRepository:
                 SELECT
                     to_regnamespace('world_cup') IS NOT NULL AS schema_exists,
                     to_regprocedure('world_cup.fn_list_editions()') IS NOT NULL AS reporting_layer_ready,
-                    to_regprocedure('world_cup.fn_seed_synthetic_data()') IS NOT NULL AS seed_functions_ready,
-                    to_regprocedure('world_cup.fn_cleanup_synthetic_data()') IS NOT NULL AS cleanup_function_ready,
-                    to_regprocedure('world_cup.fn_synthetic_data_status()') IS NOT NULL AS synthetic_status_ready,
                     to_regclass('world_cup.world_cup_edition') IS NOT NULL AS edition_table_exists,
                     to_regclass('world_cup.team') IS NOT NULL AS team_table_exists,
                     to_regclass('world_cup.match_game') IS NOT NULL AS match_table_exists
@@ -484,50 +343,11 @@ class QueryRepository:
             status = {
                 "schema_exists": capabilities["schema_exists"],
                 "reporting_layer_ready": capabilities["reporting_layer_ready"],
-                "seed_functions_ready": capabilities["seed_functions_ready"],
-                "cleanup_function_ready": capabilities["cleanup_function_ready"],
-                "synthetic_status_ready": capabilities["synthetic_status_ready"],
                 "inspection_warning": None,
-                "has_active_batch": False,
-                "active_batch_id": None,
-                "dataset_key": None,
-                "edition_years": [],
-                "created_at": None,
-                "cleaned_at": None,
-                "table_counts": {},
-                "total_rows": 0,
-                "history_batch_count": 0,
                 "edition_count": 0,
                 "team_count": 0,
                 "match_count": 0,
             }
-
-            if capabilities["synthetic_status_ready"]:
-                try:
-                    cursor.execute("SELECT * FROM world_cup.fn_synthetic_data_status()")
-                    synthetic_status = cursor.fetchone()
-                except psycopg.Error as exc:
-                    status.update(
-                        {
-                            "synthetic_status_ready": False,
-                            "inspection_warning": self._format_status_warning(exc),
-                        }
-                    )
-                else:
-                    if synthetic_status is not None:
-                        status.update(
-                            {
-                                "has_active_batch": synthetic_status["has_active_batch"],
-                                "active_batch_id": synthetic_status["active_batch_id"],
-                                "dataset_key": synthetic_status["dataset_key"],
-                                "edition_years": synthetic_status["edition_years"],
-                                "created_at": synthetic_status["created_at"],
-                                "cleaned_at": synthetic_status["cleaned_at"],
-                                "table_counts": synthetic_status["table_counts"],
-                                "total_rows": synthetic_status["total_rows"],
-                                "history_batch_count": synthetic_status["history_batch_count"],
-                            }
-                        )
 
             if (
                 capabilities["edition_table_exists"]
@@ -554,55 +374,6 @@ class QueryRepository:
                     )
 
         return status
-
-    def _format_status_warning(self, exc: psycopg.Error) -> str:
-        message = self._format_database_error(exc)
-
-        if exc.sqlstate == "42P01" and "synthetic_seed_batch" in message:
-            return (
-                "Synthetic batch metadata is unavailable because the database schema "
-                "is missing the synthetic seed tables or the SQL objects were applied "
-                "from an outdated definition. Reapply database initialization and retry."
-            )
-
-        return f"Synthetic batch metadata is unavailable. Original error: {message}"
-
-    @staticmethod
-    def _synthetic_support_ready(database_status: dict[str, Any]) -> bool:
-        return (
-            database_status["seed_functions_ready"]
-            and database_status["cleanup_function_ready"]
-            and database_status["synthetic_status_ready"]
-        )
-
-    def _database_core_ready(self, database_status: dict[str, Any]) -> bool:
-        return (
-            database_status["schema_exists"]
-            and database_status["reporting_layer_ready"]
-            and self._synthetic_support_ready(database_status)
-        )
-
-    @staticmethod
-    def _build_database_operation_result(
-        *,
-        operation: str,
-        status: str,
-        message: str,
-        database_status: dict[str, Any],
-    ) -> dict[str, Any]:
-        return {
-            **database_status,
-            "operation": operation,
-            "status": status,
-            "message": message,
-        }
-
-    @staticmethod
-    def _execute_sql_script(connection: psycopg.Connection, filename: str) -> None:
-        script_path = SQL_DIRECTORY / filename
-
-        with connection.cursor() as cursor:
-            cursor.execute(script_path.read_text(encoding="utf-8"))
 
 
 repository = QueryRepository()

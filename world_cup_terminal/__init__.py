@@ -1,1 +1,1 @@
-"""Terminal workspace for the World Cup project."""
+"""Command-line prototype for the World Cup project."""
