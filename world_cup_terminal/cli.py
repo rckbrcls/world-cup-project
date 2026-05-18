@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import getpass
 
 import typer
 from rich.panel import Panel
@@ -319,6 +320,28 @@ def collect_connection_params(
     password: str | None,
 ) -> DatabaseConnectionParams:
     defaults = service.default_connection_params()
+    should_prompt = any(value is None for value in (host, port, database, user, password))
+    default_user = defaults.user if defaults and defaults.user else getpass.getuser()
+
+    if should_prompt:
+        console.print(
+            Panel.fit(
+                (
+                    "Enter the PostgreSQL connection details for the database "
+                    "that contains the world_cup schema.\n"
+                    "Press Enter to accept defaults shown in parentheses. "
+                    "The password default is never displayed.\n"
+                    "Host and port identify the server. Database is the PostgreSQL "
+                    "database name. User and password are the PostgreSQL role "
+                    "credentials.\n"
+                    "Leave password blank only when local PostgreSQL accepts "
+                    "passwordless connections."
+                ),
+                title="Database Connection",
+                border_style="cyan",
+            )
+        )
+
     resolved_host = host or Prompt.ask(
         "Host",
         default=defaults.host if defaults else "localhost",
@@ -333,7 +356,7 @@ def collect_connection_params(
     )
     resolved_user = user or Prompt.ask(
         "User",
-        default=defaults.user if defaults else "",
+        default=default_user,
     )
     resolved_password = password
     if resolved_password is None:
@@ -341,6 +364,7 @@ def collect_connection_params(
             "Password",
             password=True,
             default=defaults.password if defaults and defaults.password else "",
+            show_default=False,
         )
 
     return DatabaseConnectionParams(
