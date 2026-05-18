@@ -14,6 +14,7 @@ from world_cup_terminal.models import QueryDefinition
 from world_cup_terminal.query_catalog import DEFAULT_QUERY_KEY, QUERY_CATALOG, QUERY_DEFINITIONS
 from world_cup_terminal.rich_render import (
     console,
+    render_command_menu,
     render_connection_summary,
     render_database_status,
     render_draft,
@@ -56,13 +57,7 @@ def launch_menu() -> None:
 
     while True:
         console.print()
-        console.print("[bold]World Cup Database Prototype[/bold]")
-        console.print("0. Database status")
-        for index, definition in enumerate(QUERY_DEFINITIONS, start=1):
-            console.print(f"{index}. {definition.title}")
-        console.print("11. Natural-language query with local Ollama")
-        console.print("12. Execute approved SQL")
-        console.print("13. Quit")
+        console.print(render_command_menu(QUERY_DEFINITIONS))
 
         selected = IntPrompt.ask("Choose an option", default=1)
 

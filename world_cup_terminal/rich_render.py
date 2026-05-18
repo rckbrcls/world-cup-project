@@ -9,7 +9,7 @@ from rich.table import Table
 
 from world_cup_core.db import DatabaseConnectionParams
 from world_cup_core.sql_assistant import NaturalQueryDraft, NaturalQueryProviderState
-from world_cup_terminal.models import QueryExecutionResult, SelectorOption
+from world_cup_terminal.models import QueryDefinition, QueryExecutionResult, SelectorOption
 
 console = Console()
 
@@ -19,6 +19,38 @@ def render_connection_summary(params: DatabaseConnectionParams) -> Panel:
         f"[bold]Database[/bold]\n{params.display_name}",
         border_style="cyan",
         title="Connection",
+    )
+
+
+def render_command_menu(query_definitions: tuple[QueryDefinition, ...]) -> Panel:
+    commands = [(0, "Database status")]
+    commands.extend(
+        (index, definition.title)
+        for index, definition in enumerate(query_definitions, start=1)
+    )
+    commands.extend(
+        [
+            (11, "Natural-language query with local Ollama"),
+            (12, "Execute approved SQL"),
+            (13, "Quit"),
+        ]
+    )
+
+    grid = Table.grid(expand=True)
+    for _ in range(3):
+        grid.add_column(ratio=1)
+
+    for row_start in range(0, len(commands), 3):
+        row = commands[row_start : row_start + 3]
+        cells = [f"[bold cyan]{number}.[/bold cyan] {label}" for number, label in row]
+        while len(cells) < 3:
+            cells.append("")
+        grid.add_row(*cells)
+
+    return Panel(
+        grid,
+        title="World Cup Database Prototype",
+        border_style="cyan",
     )
 
 
