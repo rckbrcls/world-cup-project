@@ -1,0 +1,23 @@
+Membros do grupo:
+- Erick Patrick Andrade Barcelos
+- Gustavo Fernandes da Cunha
+- Integrante 3 pendente
+- Integrante 4 pendente
+
+Como preparar o banco:
+1. Criar um banco PostgreSQL para o projeto.
+2. Aplicar, nesta ordem: sql/ddl.sql, sql/dml.sql.
+3. Opcionalmente aplicar sql/verification.sql para conferir as consultas e regras no ambiente de desenvolvimento.
+
+Como executar o prototipo:
+1. Se o uv nao estiver instalado, instalar com: curl -LsSf https://astral.sh/uv/install.sh | sh
+2. Instalar dependencias Python com: uv sync
+3. Garantir que o Ollama local esteja aberto e que OLLAMA_MODEL esteja disponivel.
+4. Rodar: uv run world-cup-terminal
+5. Informar host, porta, banco, usuario e senha quando solicitado.
+
+Observacoes:
+- O prototipo executa as 10 consultas obrigatorias e tambem planeja SQL a partir de linguagem natural usando Ollama local.
+- O SQL gerado fica visivel antes da execucao e passa por validacao read-only no PostgreSQL.
+- Os diagramas ficam em modeling/ e podem ser exportados novamente pelo draw.io se forem alterados.
+- No envio final, compactar apenas os arquivos necessarios do projeto conforme o enunciado.

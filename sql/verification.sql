@@ -1,6 +1,6 @@
 SET search_path TO world_cup, public;
 
--- Manual smoke checks for the direct course dataset loaded by sql/dml.sql.
+-- Manual smoke checks after applying sql/ddl.sql and sql/dml.sql.
 
 SELECT
     (SELECT COUNT(*) FROM confederation) AS confederations,

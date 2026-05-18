@@ -311,14 +311,13 @@ class QueryRepository:
             return (
                 "The `world_cup` schema is missing in the database selected by "
                 "`DATABASE_URL`. Apply `sql/ddl.sql` first. For a complete setup, "
-                "follow with `sql/queries.sql` and `sql/dml.sql`."
+                "follow with `sql/dml.sql`."
             )
 
         if exc.sqlstate == "42883" and "world_cup.fn_" in message:
             return (
                 "The required `world_cup` SQL functions are not available in the "
-                "current database. Apply `sql/ddl.sql`, then `sql/queries.sql`, "
-                "then retry the request."
+                "current database. Apply `sql/ddl.sql`, then retry the request."
             )
 
         return message
