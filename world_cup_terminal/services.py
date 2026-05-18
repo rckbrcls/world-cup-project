@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Any
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
+import json
+import re
+from typing import Any, Literal
 
 from world_cup_core.config import settings
 from world_cup_core.db import DatabaseConnectionParams, get_default_connection_params
@@ -26,6 +30,25 @@ from world_cup_terminal.models import (
     QueryParameterSpec,
     SelectorOption,
 )
+
+
+NaturalQueryPlanningEventKind = Literal[
+    "started",
+    "provider",
+    "chunk",
+    "assistant-preview",
+    "preflight",
+    "draft",
+]
+
+
+@dataclass(slots=True, frozen=True)
+class NaturalQueryPlanningEvent:
+    kind: NaturalQueryPlanningEventKind
+    message: str | None = None
+    chunk: str | None = None
+    provider_state: NaturalQueryProviderState | None = None
+    draft: NaturalQueryDraft | None = None
 
 
 class WorldCupTerminalService:
@@ -142,20 +165,11 @@ class WorldCupTerminalService:
 
             safe_context = context or WorkspaceContext(section="terminal")
             safe_history = history or SqlPlanningHistory()
-            prompt_text = (
-                build_sql_repair_prompt(
-                    prompt=prompt,
-                    context=safe_context,
-                    repair=repair_context,
-                    model_name=settings.ollama_model,
-                )
-                if repair_context
-                else build_sql_planning_prompt(
-                    prompt=prompt,
-                    context=safe_context,
-                    history=safe_history,
-                    model_name=settings.ollama_model,
-                )
+            prompt_text = self._build_natural_query_prompt(
+                prompt=prompt,
+                context=safe_context,
+                history=safe_history,
+                repair_context=repair_context,
             )
             raw_response = await ollama_client.generate_structured(
                 model=settings.ollama_model,
@@ -171,6 +185,78 @@ class WorldCupTerminalService:
             repository=self.repository,
             connection_params=connection_params,
         )
+
+    async def stream_natural_query(
+        self,
+        *,
+        prompt: str,
+        connection_params: DatabaseConnectionParams,
+        context: WorkspaceContext | None = None,
+        history: SqlPlanningHistory | None = None,
+        repair_context: NaturalQueryRepairContext | None = None,
+    ) -> AsyncIterator[NaturalQueryPlanningEvent]:
+        yield NaturalQueryPlanningEvent(
+            kind="started",
+            message="Thinking...",
+        )
+
+        ollama_client = self._get_ollama_client()
+
+        try:
+            provider_status = await ollama_client.get_status(settings.ollama_model)
+            provider_state = NaturalQueryProviderState.from_ollama_status(provider_status)
+            yield NaturalQueryPlanningEvent(
+                kind="provider",
+                message=provider_state.summary,
+                provider_state=provider_state,
+            )
+
+            if provider_state.status != "ready":
+                return
+
+            safe_context = context or WorkspaceContext(section="terminal")
+            safe_history = history or SqlPlanningHistory()
+            prompt_text = self._build_natural_query_prompt(
+                prompt=prompt,
+                context=safe_context,
+                history=safe_history,
+                repair_context=repair_context,
+            )
+            fragments: list[str] = []
+            last_assistant_preview: str | None = None
+
+            async for chunk in ollama_client.stream_structured_generate(
+                model=settings.ollama_model,
+                prompt=format_model_prompt(prompt_text),
+                format_schema=SqlPlanningModelResponse.model_json_schema(),
+                options={"temperature": 0},
+            ):
+                fragments.append(chunk)
+                yield NaturalQueryPlanningEvent(kind="chunk", chunk=chunk)
+
+                assistant_preview = _extract_assistant_message_preview(
+                    "".join(fragments)
+                )
+                if assistant_preview and assistant_preview != last_assistant_preview:
+                    last_assistant_preview = assistant_preview
+                    yield NaturalQueryPlanningEvent(
+                        kind="assistant-preview",
+                        message=assistant_preview,
+                    )
+
+            raw_response = "".join(fragments).strip()
+            yield NaturalQueryPlanningEvent(
+                kind="preflight",
+                message="Validating SQL proposal in PostgreSQL...",
+            )
+            draft = apply_database_preflight(
+                draft=build_sql_draft(raw_response),
+                repository=self.repository,
+                connection_params=connection_params,
+            )
+            yield NaturalQueryPlanningEvent(kind="draft", draft=draft)
+        finally:
+            await ollama_client.close()
 
     def execute_natural_query(
         self,
@@ -349,3 +435,47 @@ class WorldCupTerminalService:
             base_url=settings.ollama_base_url,
             timeout_seconds=settings.ollama_timeout_seconds,
         )
+
+    @staticmethod
+    def _build_natural_query_prompt(
+        *,
+        prompt: str,
+        context: WorkspaceContext,
+        history: SqlPlanningHistory,
+        repair_context: NaturalQueryRepairContext | None,
+    ) -> str:
+        if repair_context:
+            return build_sql_repair_prompt(
+                prompt=prompt,
+                context=context,
+                repair=repair_context,
+                model_name=settings.ollama_model,
+            )
+
+        return build_sql_planning_prompt(
+            prompt=prompt,
+            context=context,
+            history=history,
+            model_name=settings.ollama_model,
+        )
+
+
+def _extract_assistant_message_preview(raw_json: str) -> str | None:
+    match = re.search(
+        r'"assistantMessage"\s*:\s*"((?:\\.|[^"\\])*)"',
+        raw_json,
+        flags=re.DOTALL,
+    )
+
+    if not match:
+        return None
+
+    try:
+        decoded = json.loads(f'"{match.group(1)}"')
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(decoded, str):
+        return None
+
+    return decoded.strip() or None

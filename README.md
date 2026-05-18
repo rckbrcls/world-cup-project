@@ -9,7 +9,7 @@ The project models a FIFA World Cup management system in PostgreSQL and provides
 - PostgreSQL relational model for World Cup editions, teams, groups, matches, squads, referees, stadiums, events, and standings.
 - SQL-first business rules through keys, constraints, functions, views, and triggers.
 - Direct SQL data script for the demonstration dataset.
-- Python terminal prototype that reads database login parameters, executes the 10 required reports, asks local Ollama to convert natural language to SQL, shows generated SQL before execution, and handles PostgreSQL errors.
+- Python terminal prototype that reads database login parameters, executes the 10 required reports, asks local Ollama to convert natural language to SQL, streams planning feedback, shows generated SQL before execution, and handles PostgreSQL errors.
 
 This repository intentionally keeps the course sources directly in the project tree. Final packaging should be done only when the project is ready to send.
 
@@ -72,8 +72,17 @@ The prototype asks for host, port, database, user, and password. It then offers:
 
 - database status
 - the 10 required SQL reports
-- natural-language-to-SQL planning through local Ollama
+- Natural Query chat through local Ollama, with streamed planning feedback
 - controlled SQL execution with visible SQL and error handling
+
+The Natural Query chat can also be opened directly:
+
+```bash
+uv run world-cup-terminal natural-query chat
+```
+
+Inside the chat, `run` executes only the latest validated SQL proposal, and
+`exit` returns to the menu.
 
 ## Final Packaging
 

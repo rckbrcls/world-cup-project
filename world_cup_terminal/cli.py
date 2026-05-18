@@ -2,14 +2,20 @@ from __future__ import annotations
 
 import asyncio
 import getpass
+from typing import Literal
 
 import typer
+from rich.live import Live
 from rich.panel import Panel
 from rich.prompt import IntPrompt, Prompt
 
 from world_cup_core.db import DatabaseConnectionParams
 from world_cup_core.repository import NaturalQueryExecutionError
-from world_cup_core.sql_assistant import SqlPlanningHistory, WorkspaceContext
+from world_cup_core.sql_assistant import (
+    NaturalQueryDraft,
+    SqlPlanningHistory,
+    WorkspaceContext,
+)
 from world_cup_terminal.models import QueryDefinition
 from world_cup_terminal.query_catalog import DEFAULT_QUERY_KEY, QUERY_CATALOG, QUERY_DEFINITIONS
 from world_cup_terminal.rich_render import (
@@ -18,6 +24,8 @@ from world_cup_terminal.rich_render import (
     render_connection_summary,
     render_database_status,
     render_draft,
+    render_natural_query_chat_intro,
+    render_natural_query_stream,
     render_provider_state,
     render_query_result,
     render_selector_options,
@@ -72,14 +80,10 @@ def launch_menu() -> None:
             continue
 
         if selected == 11:
-            run_natural_query_from_menu(params)
+            run_natural_query_chat(params)
             continue
 
         if selected == 12:
-            run_sql_from_menu(params)
-            continue
-
-        if selected == 13:
             console.print("Goodbye.")
             return
 
@@ -223,6 +227,25 @@ def execute_natural_query(
     console.print(render_query_result("Controlled SQL Execution", result))
 
 
+@natural_query_app.command("chat")
+def chat_natural_query(
+    host: str | None = typer.Option(None, "--host"),
+    port: int | None = typer.Option(None, "--port"),
+    database: str | None = typer.Option(None, "--database"),
+    user: str | None = typer.Option(None, "--user"),
+    password: str | None = typer.Option(None, "--password"),
+) -> None:
+    params = collect_connection_params(
+        host=host,
+        port=port,
+        database=database,
+        user=user,
+        password=password,
+    )
+    console.print(render_connection_summary(params))
+    run_natural_query_chat(params)
+
+
 def run_definition_from_menu(
     params: DatabaseConnectionParams,
     definition: QueryDefinition,
@@ -245,46 +268,94 @@ def run_definition_from_menu(
     console.print(render_query_result(definition.title, result))
 
 
-def run_natural_query_from_menu(params: DatabaseConnectionParams) -> None:
-    user_prompt = Prompt.ask("Natural-language request").strip()
-    provider_state = asyncio.run(service.get_provider_state())
-    console.print(render_provider_state(provider_state))
+def run_natural_query_chat(params: DatabaseConnectionParams) -> None:
+    pending_draft: NaturalQueryDraft | None = None
+    pending_prompt: str | None = None
+    history = SqlPlanningHistory()
 
-    if provider_state.status != "ready":
-        return
+    console.print(render_natural_query_chat_intro())
 
-    try:
-        draft = asyncio.run(
-            service.plan_natural_query(
-                prompt=user_prompt,
-                connection_params=params,
-                context=WorkspaceContext(section="terminal-menu"),
-                history=SqlPlanningHistory(),
+    while True:
+        user_input = Prompt.ask("Natural Query").strip()
+        if not user_input:
+            continue
+
+        command = user_input.lower()
+
+        if command in {"exit", "quit"}:
+            console.print("Returning to the main menu.")
+            return
+
+        if command == "run":
+            if not pending_draft or not pending_prompt:
+                console.print(
+                    Panel(
+                        "There is no pending SQL proposal to run.",
+                        title="Natural Query Chat",
+                        border_style="yellow",
+                    )
+                )
+                continue
+
+            if not pending_draft.is_executable or not pending_draft.normalized_sql:
+                console.print(
+                    Panel(
+                        "The latest SQL proposal is not executable. Ask a new question.",
+                        title="Approval Blocked",
+                        border_style="yellow",
+                    )
+                )
+                continue
+
+            approved_sql = pending_draft.normalized_sql
+            failure = execute_sql_text(params=params, sql=approved_sql)
+            history = _build_chat_history(
+                prompt=pending_prompt,
+                draft=pending_draft,
+                proposal_state="blocked" if failure else "approved",
             )
+
+            if failure:
+                pending_draft = None
+                pending_prompt = None
+                console.print(
+                    Panel(
+                        "Ask a new question if you need another SQL proposal.",
+                        title="Execution Failed",
+                        border_style="yellow",
+                    )
+                )
+                continue
+
+            pending_draft = None
+            pending_prompt = None
+            continue
+
+        pending_prompt = user_input
+        pending_draft = None
+
+        draft = _plan_natural_query_with_stream(
+            params=params,
+            prompt=user_input,
+            history=history,
         )
-    except Exception as exc:
-        console.print(Panel(str(exc), title="Planning Error", border_style="red"))
-        return
+        if draft is None:
+            continue
 
-    for panel in render_draft(user_prompt, draft):
-        console.print(panel)
-
-    if not draft.is_executable or not draft.preview_sql:
-        return
-
-    approval = Prompt.ask("Execute this SQL?", choices=["yes", "no"], default="no")
-    if approval != "yes":
-        return
-
-    execute_sql_text(params=params, sql=draft.preview_sql)
+        pending_draft = draft if draft.is_executable else None
+        history = _build_chat_history(
+            prompt=user_input,
+            draft=draft,
+            proposal_state="blocked",
+        )
+        _print_pending_action_hint(draft)
 
 
-def run_sql_from_menu(params: DatabaseConnectionParams) -> None:
-    sql = Prompt.ask("Approved SQL").strip()
-    execute_sql_text(params=params, sql=sql)
-
-
-def execute_sql_text(*, params: DatabaseConnectionParams, sql: str) -> None:
+def execute_sql_text(
+    *,
+    params: DatabaseConnectionParams,
+    sql: str,
+) -> Exception | None:
     try:
         result = service.execute_natural_query(
             sql=sql,
@@ -298,12 +369,145 @@ def execute_sql_text(*, params: DatabaseConnectionParams, sql: str) -> None:
                 border_style="red",
             )
         )
-        return
+        return exc
     except Exception as exc:
         console.print(Panel(str(exc), title="SQL Error", border_style="red"))
-        return
+        return exc
 
     console.print(render_query_result("Controlled SQL Execution", result))
+    return None
+
+
+def _plan_natural_query_with_stream(
+    *,
+    params: DatabaseConnectionParams,
+    prompt: str,
+    history: SqlPlanningHistory,
+) -> NaturalQueryDraft | None:
+    try:
+        draft = asyncio.run(
+            _collect_streamed_natural_query_draft(
+                params=params,
+                prompt=prompt,
+                history=history,
+            )
+        )
+    except Exception as exc:
+        console.print(Panel(str(exc), title="Planning Error", border_style="red"))
+        return None
+
+    if draft is None:
+        return None
+
+    for panel in render_draft(prompt, draft):
+        console.print(panel)
+
+    return draft
+
+
+async def _collect_streamed_natural_query_draft(
+    *,
+    params: DatabaseConnectionParams,
+    prompt: str,
+    history: SqlPlanningHistory,
+) -> NaturalQueryDraft | None:
+    status = "Thinking..."
+    chunk_count = 0
+    assistant_preview: str | None = None
+    draft: NaturalQueryDraft | None = None
+
+    with Live(
+        render_natural_query_stream(
+            status=status,
+            chunk_count=chunk_count,
+            assistant_preview=assistant_preview,
+        ),
+        console=console,
+        refresh_per_second=8,
+        transient=False,
+    ) as live:
+        async for event in service.stream_natural_query(
+            prompt=prompt,
+            connection_params=params,
+            context=WorkspaceContext(section="terminal-chat"),
+            history=history,
+        ):
+            if event.kind == "started" and event.message:
+                status = event.message
+
+            if event.kind == "provider" and event.provider_state:
+                status = (
+                    f"{event.provider_state.summary}\n"
+                    f"Model: {event.provider_state.model}\n"
+                    f"{event.provider_state.detail}"
+                )
+
+            if event.kind == "chunk":
+                chunk_count += 1
+
+            if event.kind == "assistant-preview":
+                assistant_preview = event.message
+
+            if event.kind == "preflight" and event.message:
+                status = event.message
+
+            if event.kind == "draft":
+                draft = event.draft
+                status = (
+                    "SQL proposal ready."
+                    if draft and draft.is_executable
+                    else "SQL proposal blocked."
+                )
+
+            live.update(
+                render_natural_query_stream(
+                    status=status,
+                    chunk_count=chunk_count,
+                    assistant_preview=assistant_preview,
+                )
+            )
+
+    return draft
+
+
+def _build_chat_history(
+    *,
+    prompt: str,
+    draft: NaturalQueryDraft,
+    proposal_state: Literal["approved", "blocked"],
+) -> SqlPlanningHistory:
+    sql = draft.normalized_sql or draft.preview_sql
+    last_sql_proposal = None
+
+    if sql:
+        last_sql_proposal = (sql, proposal_state)
+
+    return SqlPlanningHistory(
+        last_user_prompt=prompt,
+        last_assistant_message=draft.assistant_message,
+        last_sql_proposal=last_sql_proposal,
+    )
+
+
+def _print_pending_action_hint(draft: NaturalQueryDraft) -> None:
+    if draft.is_executable and draft.normalized_sql:
+        console.print(
+            Panel(
+                "Type run to execute this validated SQL proposal. "
+                "Type exit to return to the main menu.",
+                title="Awaiting Approval",
+                border_style="green",
+            )
+        )
+        return
+
+    console.print(
+        Panel(
+            "No executable SQL is pending. Ask a new question or type exit.",
+            title="Approval Blocked",
+            border_style="yellow",
+        )
+    )
 
 
 def collect_connection_params(

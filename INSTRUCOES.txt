@@ -15,9 +15,11 @@ Como executar o prototipo:
 3. Garantir que o Ollama local esteja aberto e que OLLAMA_MODEL esteja disponivel.
 4. Rodar: uv run world-cup-terminal
 5. Informar host, porta, banco, usuario e senha quando solicitado.
+6. Para abrir o fluxo conversacional diretamente: uv run world-cup-terminal natural-query chat
 
 Observacoes:
-- O prototipo executa as 10 consultas obrigatorias e tambem planeja SQL a partir de linguagem natural usando Ollama local.
+- O prototipo executa as 10 consultas obrigatorias e tambem planeja SQL a partir de linguagem natural usando Ollama local, com feedback de streaming no chat Natural Query.
 - O SQL gerado fica visivel antes da execucao e passa por validacao read-only no PostgreSQL.
+- No chat Natural Query, somente o comando run executa a proposta SQL validada mais recente; exit volta ao menu.
 - Os diagramas ficam em modeling/ e podem ser exportados novamente pelo draw.io se forem alterados.
 - No envio final, compactar apenas os arquivos necessarios do projeto conforme o enunciado.

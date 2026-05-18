@@ -6,6 +6,7 @@ from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+from rich.text import Text
 
 from world_cup_core.db import DatabaseConnectionParams
 from world_cup_core.sql_assistant import NaturalQueryDraft, NaturalQueryProviderState
@@ -30,9 +31,8 @@ def render_command_menu(query_definitions: tuple[QueryDefinition, ...]) -> Panel
     )
     commands.extend(
         [
-            (11, "Natural-language query with local Ollama"),
-            (12, "Execute approved SQL"),
-            (13, "Quit"),
+            (11, "Natural Query chat with local Ollama"),
+            (12, "Quit"),
         ]
     )
 
@@ -119,6 +119,37 @@ def render_provider_state(provider_state: NaturalQueryProviderState) -> Panel:
         border_style=tone,
         title="Natural Query",
     )
+
+
+def render_natural_query_chat_intro() -> Panel:
+    return Panel.fit(
+        (
+            "Ask a World Cup data question in natural language.\n"
+            "Commands: [bold]run[/bold], [bold]exit[/bold].\n"
+            "Only run executes the latest validated SQL proposal."
+        ),
+        border_style="cyan",
+        title="Natural Query Chat",
+    )
+
+
+def render_natural_query_stream(
+    *,
+    status: str,
+    chunk_count: int,
+    assistant_preview: str | None,
+) -> Panel:
+    body = Text()
+    body.append(f"{status}\n", style="bold cyan")
+    body.append(f"Chunks received: {chunk_count}\n", style="dim")
+
+    if assistant_preview:
+        body.append("\nAssistant preview (streaming, not final):\n", style="dim")
+        body.append(assistant_preview)
+    else:
+        body.append("\nWaiting for the local model response...", style="dim")
+
+    return Panel(body, border_style="cyan", title="Natural Query Chat")
 
 
 def render_draft(prompt: str, draft: NaturalQueryDraft) -> list[Panel]:
